@@ -146,6 +146,11 @@
 
         <button id="genBtn" onclick="generate()" disabled>GENERATE</button>
         
+        <div class="row" style="margin-top: 10px; justify-content: center; background: #222; padding: 8px; border-radius: 8px; border: 1px solid #333;">
+            <input type="checkbox" id="autoDlCheck" style="width: auto; margin-right: 10px;" onchange="saveAutoDlState()">
+            <label for="autoDlCheck" style="margin: 0; cursor: pointer; color: #ccc; font-weight: bold; font-size: 13px;">Auto-Save Images to Device</label>
+        </div>
+
         <div id="gallery">
             <div class="spinner" id="loadingSpinner"></div>
         </div>

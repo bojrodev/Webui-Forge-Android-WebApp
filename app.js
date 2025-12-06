@@ -263,7 +263,7 @@ async function generate() {
         "n_iter": parseInt(document.getElementById('batchCount').value),
         "sampler_name": document.getElementById('samplerSelect').value,
         "scheduler": document.getElementById('schedulerSelect').value,
-        "seed": seedVal, // ADDED SEED
+        "seed": seedVal,
         "save_images": true
     };
 
@@ -282,6 +282,12 @@ async function generate() {
                 gallery.appendChild(img);
             });
             dlBtn.classList.remove('hidden');
+            
+            // --- AUTO DOWNLOAD CHECK ---
+            if(document.getElementById('autoDlCheck').checked) {
+                setTimeout(downloadResults, 200); 
+            }
+            
             if(data.info) {
                 const info = JSON.parse(data.info);
                 metaDiv.innerText = `Seed: ${info.seed}\nModel: ${info.sd_model_name}\nSampler: ${payload.sampler_name} (${payload.scheduler})`;
@@ -352,3 +358,17 @@ function findBytes(h, n) { for(let i=0;i<h.length-n.length;i++){let f=true;for(l
 ['dragenter', 'dragover'].forEach(e => uploadBox.addEventListener(e, (ev) => { ev.preventDefault(); uploadBox.classList.add('highlight'); }));
 ['dragleave', 'drop'].forEach(e => uploadBox.addEventListener(e, (ev) => { ev.preventDefault(); uploadBox.classList.remove('highlight'); }));
 uploadBox.addEventListener('drop', (e) => { document.getElementById('imageUpload').files = e.dataTransfer.files; handleFileSelect({ target: { files: e.dataTransfer.files } }); });
+
+// --- AUTO DOWNLOAD STATE MANAGEMENT ---
+function loadAutoDlState() {
+    const isAuto = localStorage.getItem('bojroAutoSave') === 'true';
+    document.getElementById('autoDlCheck').checked = isAuto;
+}
+
+function saveAutoDlState() {
+    const isChecked = document.getElementById('autoDlCheck').checked;
+    localStorage.setItem('bojroAutoSave', isChecked);
+}
+
+// Initialize toggle state on load
+loadAutoDlState();

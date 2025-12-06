@@ -41,8 +41,24 @@ h2 {
 .indicator.err { background: #f44336; box-shadow: 0 0 8px #f44336; }
 
 label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; margin-left: 2px; margin-top: 5px;}
-select, input, textarea { background: var(--panel); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; -webkit-appearance: none; }
+
+/* GENERAL INPUT STYLING */
+select, input, textarea { 
+    background: var(--panel); border: 1px solid var(--border); color: white; padding: 12px; 
+    border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; -webkit-appearance: none; 
+}
 select:focus, input:focus, textarea:focus { border-color: var(--accent); outline: none; }
+
+/* FIX FOR CHECKBOX VISIBILITY */
+input[type="checkbox"] {
+    -webkit-appearance: checkbox !important;
+    appearance: checkbox !important;
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent); /* Makes the tick orange */
+    padding: 0;
+    cursor: pointer;
+}
 
 .btn-small { padding: 10px 15px; background: #333; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex-shrink: 0;}
 .btn-small:active { background: #555; }
