@@ -3,171 +3,239 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Bojro Resolver</title>
+    <title>Bojro Flux | Thunder Edition</title>
     
-    <meta name="theme-color" content="#121212">
+    <meta name="theme-color" content="#0f0518">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <link rel="manifest" href="manifest.json">
     <link rel="manifest" id="dynamic-manifest">
-    <link rel="apple-touch-icon" id="apple-icon" href="icon.png">
+    <link rel="apple-touch-icon" id="apple-icon">
     
-    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+<link rel="stylesheet" href="style.css">
+    
 </head>
 <body>
 
-    <div id="installBanner" class="hidden">⬇️ INSTALL BOJRO (FULL SCREEN)</div>
-
-    <h2>Bojro Elegance<br>Diffusion Resolver</h2>
-
-    <div class="tab-bar">
-        <div class="tab active" onclick="switchTab('gen')">GEN</div>
-        <div class="tab" onclick="switchTab('gal')">GALLERY</div>
-        <div class="tab" onclick="switchTab('ana')">ANALYZER</div>
-    </div>
-
-    <div id="view-gen">
-        <div id="connBar" class="row">
-            <input type="text" id="hostIp" placeholder="Enter full WebUI URL (http://192.168.x.x:7860)" value="">
-            <button onclick="connect()" class="btn-small">LINK</button>
-            <div id="statusDot" class="indicator"></div>
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header-row">
+            <h2>BOJRO RESOLVER</h2>
+            <button class="btn-icon" id="themeToggle" onclick="toggleTheme()">
+                <i data-lucide="sun"></i>
+            </button>
         </div>
 
-        <div class="col">
-            <label>Checkpoint</label>
-            <div class="row">
-                <select id="modelSelect" onchange="changeModel()"><option>Link first.....</option></select>
-                <button onclick="setDefaultModel()" class="btn-small" style="padding: 8px 12px;">⭐</button>
+        <div id="installBanner" class="hidden">⬇️ INSTALL APP</div>
+
+        <!-- GENERATOR VIEW -->
+        <div id="view-gen">
+            
+            <div class="glass-box" style="padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                    <i data-lucide="wifi" size="16" style="color:var(--text-muted)"></i>
+                    <input type="text" id="hostIp" placeholder="Enter WebUI URL..." style="background: transparent; border: none; padding: 0; font-family: monospace; font-size: 12px;">
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button onclick="connect()" class="btn-small" style="font-size: 10px;">LINK</button>
+                    <div id="statusDot" class="indicator"></div>
+                </div>
             </div>
-        </div>
-        
-        <div class="col">
-            <label>VAE</label>
-            <input type="text" value="Automatic (SDXL Default)" readonly style="color: #ccc; background: #222; border-color: #444;">
-        </div>
-        
-        <div class="col">
-            <label>Diffusion Bits</label>
-            <input type="text" value="Automatic (SDXL Default)" readonly style="color: #ccc; background: #222; border-color: #444;">
-        </div>
 
-        <div class="col">
-            <label>Prompt</label>
-            <textarea id="prompt">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish,masterpiece,best quality,</textarea>
-            <button onclick="openLoraModal()" class="btn-small" style="width: 100%; background: #222; border: 1px dashed #555; margin-bottom: 5px;">+ SELECT LORA</button>
-            <label>Negative Prompt</label>
-            <textarea id="neg" style="min-height: 50px;">bad quality,worst quality,worst detail,</textarea>
-        </div>
-
-        <div class="row">
-            <div class="col">
-                <label>Sampler</label>
-                <select id="samplerSelect"><option>Euler a</option></select>
-            </div>
-            <div class="col">
-                <label>Schedule</label>
-                <select id="schedulerSelect"><option>Karras</option></select>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col"><label>Steps</label><input type="number" id="steps" value="20"></div>
-            <div class="col"><label>CFG</label><input type="number" id="cfg" value="7"></div>
-        </div>
-        <div class="row">
-            <div class="col"><label>Width</label><input type="number" id="width" value="768" step="64"></div>
-            <div class="col"><label>Height</label><input type="number" id="height" value="1365" step="64"></div>
-        </div>
-        
-        <div id="resSelector">
-            <label style="margin-top: 10px;">Quick Aspect Ratio Switches</label>
-            <div id="resGrid">
-                <div class="mp-label">1 MP</div>
-                <div class="res-switch" onclick="setResolution(1024, 1024)">1:1</div>
-                <div class="res-switch" onclick="setResolution(1254, 836)">3:2</div>
-                <div class="res-switch" onclick="setResolution(1182, 887)">4:3</div>
-                <div class="res-switch" onclick="setResolution(1365, 768)">16:9</div>
-                <div class="res-switch" onclick="setResolution(1564, 670)">21:9</div>
+            <div class="glass-box">
+                <div class="col">
+                    <label><i data-lucide="cpu" size="12"></i> Checkpoint</label>
+                    <div class="row">
+                        <select id="modelSelect" onchange="changeModel()"><option>Link first...</option></select>
+                        <button onclick="setDefaultModel()" class="btn-icon" style="width: 44px; height: 44px;"><i data-lucide="star" size="14"></i></button>
+                    </div>
+                </div>
                 
-                <div class="mp-label">2 MP</div>
-                <div class="res-switch" onclick="setResolution(1448, 1448)">1:1</div>
-                <div class="res-switch" onclick="setResolution(1773, 1182)">3:2</div>
-                <div class="res-switch" onclick="setResolution(1672, 1254)">4:3</div>
-                <div class="res-switch" onclick="setResolution(1936, 1089)">16:9</div>
-                <div class="res-switch" onclick="flipResolution()">W↔H</div>
+                
+            </div>
+
+            <div class="col" style="margin-bottom: 20px;">
+                <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                <textarea id="prompt" rows="3">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish,masterpiece,best quality,</textarea>
+                
+                <button onclick="openLoraModal()" class="btn-small" style="width: 100%; border: 1px dashed var(--input-border); margin: 5px 0;">+ SELECT LORA</button>
+                
+                <label><i data-lucide="shield-off" size="12"></i> Negative</label>
+                <textarea id="neg" style="min-height: 50px;">bad quality,worst quality,worst detail,</textarea>
+            </div>
+
+            <div class="glass-box">
+                <div class="row">
+                    <div class="col">
+                        <label>Sampler</label>
+                        <select id="samplerSelect"><option>Euler a</option></select>
+                    </div>
+                    <div class="col">
+                        <label>Schedule</label>
+                        <select id="schedulerSelect"><option>Karras</option></select>
+                    </div>
+                </div>
+
+                <div class="row" style="margin-top: 10px;">
+                    <div class="col"><label>Steps</label><input type="number" id="steps" value="20"></div>
+                    <div class="col"><label>CFG</label><input type="number" id="cfg" value="7"></div>
+                </div>
+
+                <div class="row" style="margin-top: 10px;">
+                    <div class="col"><label>Width</label><input type="number" id="width" value="768" step="64"></div>
+                    <div class="col"><label>Height</label><input type="number" id="height" value="1365" step="64"></div>
+                </div>
+
+                <!-- RESOLUTION GRID (Styled) -->
+                <div id="resSelector" style="margin-top: 15px;">
+                    <label>Aspect Ratio</label>
+                    <div id="resGrid">
+                        <!-- 1MP -->
+                        <div class="mp-label">1MP</div>
+                        <div class="res-switch" onclick="setResolution(1024, 1024)">1:1</div>
+                        <div class="res-switch" onclick="setResolution(1254, 836)">3:2</div>
+                        <div class="res-switch" onclick="setResolution(1182, 887)">4:3</div>
+                        <div class="res-switch" onclick="setResolution(1365, 768)">16:9</div>
+                        <div class="res-switch" onclick="setResolution(1564, 670)">21:9</div>
+                        
+                        <!-- 2MP -->
+                        <div class="mp-label">2MP</div>
+                        <div class="res-switch" onclick="setResolution(1448, 1448)">1:1</div>
+                        <div class="res-switch" onclick="setResolution(1773, 1182)">3:2</div>
+                        <div class="res-switch" onclick="setResolution(1672, 1254)">4:3</div>
+                        <div class="res-switch" onclick="setResolution(1936, 1089)">16:9</div>
+                        <div class="res-switch" onclick="flipResolution()"><i data-lucide="arrow-left-right" size="12"></i></div>
+                    </div>
+                </div>
+
+                <div class="row" style="margin-top: 15px;">
+                    <div class="col"><label>Batch</label><input type="number" id="batchSize" value="1"></div>
+                    <div class="col"><label>Count</label><input type="number" id="batchCount" value="1"></div>
+                </div>
+
+                <div class="col" style="margin-top: 10px;">
+                    <label>Seed</label>
+                    <div class="row">
+                        <input type="number" id="seed" value="-1" placeholder="-1">
+                        <button onclick="document.getElementById('seed').value = '-1'" class="btn-icon" style="width: 44px;"><i data-lucide="dices" size="16"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="genBtn" onclick="generate()">GENERATE</button>
+
+            <div class="row" style="margin-top: 15px; justify-content: center;">
+                <input type="checkbox" id="autoDlCheck" onchange="saveAutoDlState()" style="width: 16px; height: 16px;">
+                <label for="autoDlCheck" style="margin: 0; color: var(--text-main);">Auto-Save Images</label>
+            </div>
+
+            <div id="gallery"><div class="spinner" id="loadingSpinner"></div></div>
+            <button id="dlBtn" class="btn-small hidden" onclick="downloadResults()" style="width:100%; margin-top:10px; background:var(--accent-secondary); color:white; padding:15px;">DOWNLOAD ALL</button>
+            <div id="metaData" class="glass-box hidden" style="font-family: monospace; font-size: 10px; color: var(--text-muted);"></div>
+        </div>
+
+        <!-- GALLERY VIEW -->
+        <div id="view-gal" class="hidden">
+            <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+                <label style="font-size: 14px; color: var(--text-main);">HISTORY</label>
+                <button onclick="clearDbGallery()" class="btn-small" style="background: #f44336;">CLEAR</button>
+            </div>
+            <div id="savedGalleryGrid">
+                <div style="text-align:center; color:var(--text-muted); margin-top:50px;">Empty History</div>
             </div>
         </div>
-        <div class="row">
-            <div class="col"><label>Batch Size</label><input type="number" id="batchSize" value="1"></div>
-            <div class="col"><label>Batch Count</label><input type="number" id="batchCount" value="1"></div>
-        </div>
 
-        <div class="col">
-            <label>Seed (-1 for Random)</label>
-            <div class="row" style="gap: 5px;">
-                <input type="number" id="seed" value="-1" placeholder="-1">
-                <button onclick="document.getElementById('seed').value = '-1'" class="btn-small" style="padding: 12px; width: auto;">🎲</button>
+        <!-- ANALYZER VIEW -->
+        <div id="view-ana" class="hidden">
+            <label for="imageUpload">
+                <div id="uploadBox">
+                    <i data-lucide="image-plus" size="32" style="margin-bottom: 10px; color: var(--text-muted);"></i>
+                    <div style="font-weight: bold; color: var(--text-main);">TAP TO UPLOAD</div>
+                </div>
+            </label>
+            <input type="file" id="imageUpload" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+            
+            <div class="glass-box" style="margin-top: 20px;">
+                <div class="row">
+                    <div class="col">
+                        <label>Resolution</label>
+                        <div id="resOut" style="font-weight: bold; color: var(--text-main);">-- x --</div>
+                    </div>
+                    <div class="col">
+                        <label>Ratio</label>
+                        <div id="arOut" style="font-weight: bold; color: var(--text-main);">--</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label>Date</label>
+                    <div id="dateOut" style="font-size: 12px; color: var(--text-main);">N/A</div>
+                </div>
+            </div>
+
+            <div id="anaGallery" class="hidden" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--glass-border);">
+                <img id="anaPreview" style="width: 100%; display: block;">
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <label>Metadata</label>
+                <div id="anaMeta" class="glass-box" style="min-height: 100px; font-family: monospace; font-size: 10px; color: var(--text-muted); word-break: break-all;">Load image...</div>
             </div>
         </div>
 
-        <button id="genBtn" onclick="generate()" disabled>GENERATE</button>
-        
-        <div class="row" style="margin-top: 10px; justify-content: center; background: #222; padding: 8px; border-radius: 8px; border: 1px solid #333;">
-            <input type="checkbox" id="autoDlCheck" style="width: auto; margin-right: 10px;" onchange="saveAutoDlState()">
-            <label for="autoDlCheck" style="margin: 0; cursor: pointer; color: #ccc; font-weight: bold; font-size: 13px;">Auto-Save Images</label>
-        </div>
-
-        <div id="gallery"><div class="spinner" id="loadingSpinner"></div></div>
-        <button id="dlBtn" class="btn-small hidden" onclick="downloadResults()" style="width:100%; margin-top:10px; background:#2196F3; color:white; padding:15px;">⬇️ DOWNLOAD RESULTS</button>
-        <div id="metaData" class="meta-box hidden"></div>
     </div>
 
-    <div id="view-gal" class="hidden">
-        <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
-            <label style="font-size: 14px;">SAVED HISTORY</label>
-            <button onclick="clearDbGallery()" class="btn-small" style="background: #f44336;">CLEAR ALL</button>
-        </div>
-        <div id="savedGalleryGrid">
-            <div style="text-align:center; color:#666; margin-top:50px;">Generate images to see them here.</div>
-        </div>
-    </div>
-
-    <div id="view-ana" class="hidden">
-        <label for="imageUpload">
-            <div id="uploadBox">
-                <div style="font-weight: bold; color: #888;">TAP TO UPLOAD</div>
-                <div style="font-size: 12px; color: #555;">JPG, PNG, WEBP</div>
-            </div>
-        </label>
-        <input type="file" id="imageUpload" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
-        <div class="grid-info">
-            <div class="info-card"><div class="info-label">Resolution</div><div id="resOut" class="info-val">-- x --</div></div>
-            <div class="info-card"><div class="info-label">Aspect Ratio</div><div id="arOut" class="info-val">--</div></div>
-            <div class="info-card" style="grid-column: span 2;"><div class="info-label">Date</div><div id="dateOut" class="info-val">N/A</div></div>
-        </div>
-        <div id="anaGallery" class="hidden" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
-            <img id="anaPreview" style="width: 100%; display: block;">
-        </div>
-        <div style="margin-top: 15px;">
-            <label>Metadata / Prompts</label>
-            <div id="anaMeta" class="meta-box" style="min-height: 100px;">Load an image to extract data...</div>
-        </div>
-    </div>
-
+    <!-- MODALS -->
     <div id="loraModal" class="modal hidden">
         <div class="modal-content">
-            <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn">✕</button></div>
-            <input type="text" id="loraSearch" placeholder="Search LoRAs..." onkeyup="filterLoras()">
+            <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn" style="color:var(--text-main); font-size:24px;">×</button></div>
+            <input type="text" id="loraSearch" placeholder="Search..." onkeyup="filterLoras()">
             <div id="loraVerticalList"></div>
         </div>
     </div>
 
-    <div id="fullScreenModal" class="modal hidden" style="background: rgba(0,0,0,0.95);">
-        <img id="fsImage" style="max-width: 100%; max-height: 80vh; object-fit: contain;">
+    <div id="fullScreenModal" class="modal hidden">
+        <img id="fsImage" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px;">
         <div class="row" style="position: absolute; bottom: 30px; gap: 15px;">
             <button onclick="closeFsModal()" class="btn-small" style="background: #333;">CLOSE</button>
-            <button onclick="analyzeCurrentFs()" class="btn-small" style="background: var(--accent); color: black;">🔍 SEE METADATA</button>
+            <button onclick="analyzeCurrentFs()" class="btn-small" style="background: var(--accent-primary);">ANALYZE</button>
+        </div>
+    </div>
+
+    <!-- MAGIC NAV -->
+    <div class="nav-wrapper">
+        <div class="magic-nav">
+            <ul class="magic-list">
+                <div id="indicator" class="indicator-ball" style="transform: translateX(0);">
+                    <div class="curve-left"></div>
+                    <div class="curve-right"></div>
+                </div>
+                <!-- Note: 'tab' class preserved for JS functionality -->
+                <li class="tab active" onclick="switchTab('gen')">
+                    <a class="magic-link">
+                        <span class="magic-icon"><i data-lucide="zap"></i></span>
+                        <span class="magic-text">GEN</span>
+                    </a>
+                </li>
+                <li class="tab" onclick="switchTab('gal')">
+                    <a class="magic-link">
+                        <span class="magic-icon"><i data-lucide="image"></i></span>
+                        <span class="magic-text">GAL</span>
+                    </a>
+                </li>
+                <li class="tab" onclick="switchTab('ana')">
+                    <a class="magic-link">
+                        <span class="magic-icon"><i data-lucide="scan-line"></i></span>
+                        <span class="magic-text">ANA</span>
+                    </a>
+                </li>
+            </ul>
         </div>
     </div>
 
