@@ -1,452 +1,503 @@
-        // Init Icons
-        lucide.createIcons();
+lucide.createIcons();
 
-        // --- THEME LOGIC ---
-        function toggleTheme() {
-            const btn = document.getElementById('themeToggle');
-            const root = document.documentElement;
-            if (root.getAttribute('data-theme') === 'light') {
-                root.removeAttribute('data-theme');
-                btn.innerHTML = '<i data-lucide="sun"></i>';
-                localStorage.setItem('bojroTheme', 'dark');
-            } else {
-                root.setAttribute('data-theme', 'light');
-                btn.innerHTML = '<i data-lucide="moon"></i>';
-                localStorage.setItem('bojroTheme', 'light');
-            }
-            lucide.createIcons();
-        }
-        if(localStorage.getItem('bojroTheme') === 'light') toggleTheme();
+// --- STATE ---
+let currentMode = 'xl'; 
+let db;
+let currentGalleryImages = [];
+let currentGalleryIndex = 0;
+let allLoras = [];
+let HOST = "";
 
-        // --- VISUAL ONLY: Update Magic Ball Position when Tabs Clicked ---
-        // This is a UI helper that does not interfere with the core 'switchTab' logic.
-        document.querySelectorAll('.tab').forEach((tab, index) => {
-            tab.addEventListener('click', () => {
-                document.getElementById('indicator').style.transform = `translateX(${index * 100}%)`;
+// --- THEME ---
+function toggleTheme() {
+    const root = document.documentElement;
+    if (root.getAttribute('data-theme') === 'light') {
+        root.removeAttribute('data-theme');
+        document.getElementById('themeToggle').innerHTML = '<i data-lucide="sun"></i>';
+    } else {
+        root.setAttribute('data-theme', 'light');
+        document.getElementById('themeToggle').innerHTML = '<i data-lucide="moon"></i>';
+    }
+    lucide.createIcons();
+}
+
+// --- HELPER: HEADERS ---
+const getHeaders = () => ({ 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' });
+
+// --- VRAM PROFILE MAPPING ---
+function getVramMapping() {
+    const profile = document.getElementById('vramProfile').value;
+    switch(profile) {
+        case 'low': return 4096; 
+        case 'mid': return 8192; 
+        case 'high': return 32768; 
+        default: return 8192;
+    }
+}
+
+// --- MODE SWITCHING (UI ONLY + SILENT CLEAR) ---
+window.setMode = async function(mode) {
+    if (currentMode !== mode) {
+        if(HOST) await unloadModel(true); 
+    }
+
+    currentMode = mode;
+    const root = document.documentElement;
+    const btnXL = document.getElementById('btn-xl');
+    const btnFlux = document.getElementById('btn-flux');
+    
+    const xlRow = document.getElementById('row-xl-model');
+    const fluxRow = document.getElementById('row-flux-model');
+    const xlCont = document.getElementById('mode-xl-container');
+    const fluxCont = document.getElementById('mode-flux-container');
+
+    if(mode === 'flux') {
+        root.setAttribute('data-mode', 'flux');
+        btnXL.classList.remove('active');
+        btnFlux.classList.add('active');
+        xlRow.classList.add('hidden');
+        fluxRow.classList.remove('hidden');
+        xlCont.classList.add('hidden');
+        fluxCont.classList.remove('hidden');
+        document.getElementById('genBtn').innerText = "QUANTUM GENERATE";
+        document.getElementById('appTitle').innerText = "BOJRO FLUX RESOLVER";
+    } else {
+        root.removeAttribute('data-mode');
+        btnFlux.classList.remove('active');
+        btnXL.classList.add('active');
+        fluxRow.classList.add('hidden');
+        xlRow.classList.remove('hidden');
+        fluxCont.classList.add('hidden');
+        xlCont.classList.remove('hidden');
+        document.getElementById('genBtn').innerText = "GENERATE";
+        document.getElementById('appTitle').innerText = "BOJRO RESOLVER";
+    }
+}
+
+// --- DB ---
+const request = indexedDB.open("BojroHybridDB", 1);
+request.onupgradeneeded = e => { db = e.target.result; db.createObjectStore("images", { keyPath: "id", autoIncrement: true }); };
+request.onsuccess = e => { db = e.target.result; loadGallery(); loadHostIp(); };
+
+function saveImageToDB(base64) {
+    if(db) db.transaction(["images"], "readwrite").objectStore("images").add({ data: base64, date: new Date().toLocaleString() });
+}
+window.clearDbGallery = function() {
+    if(confirm("Delete history?")) {
+        db.transaction(["images"], "readwrite").objectStore("images").clear();
+        loadGallery();
+    }
+}
+
+// --- NAV ---
+window.switchTab = function(view) {
+    document.querySelectorAll('.dock-item').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-' + view).classList.remove('hidden');
+    
+    const items = document.querySelectorAll('.dock-item');
+    if(view === 'gen') items[0].classList.add('active');
+    if(view === 'gal') { items[1].classList.add('active'); loadGallery(); }
+    if(view === 'ana') items[2].classList.add('active');
+}
+
+// --- CONNECT ---
+function loadHostIp() { const ip = localStorage.getItem('bojroHostIp'); if(ip) document.getElementById('hostIp').value = ip; }
+window.connect = async function() {
+    HOST = document.getElementById('hostIp').value.replace(/\/$/, "");
+    const dot = document.getElementById('statusDot');
+    dot.style.background = "yellow";
+    try {
+        const res = await fetch(`${HOST}/sdapi/v1/sd-models`, { headers: getHeaders() });
+        if(!res.ok) throw new Error("Status " + res.status);
+        dot.style.background = "#00e676"; dot.classList.add('on');
+        localStorage.setItem('bojroHostIp', HOST);
+        document.getElementById('genBtn').disabled = false;
+        await fetchModels(); await fetchSamplers(); await fetchLoras(); await fetchVaes(); 
+        alert("CONNECTED");
+    } catch(e) {
+        dot.style.background = "#f44336"; alert("Failed: " + e.message);
+    }
+}
+
+// --- FETCHERS ---
+async function fetchModels() {
+    try {
+        const res = await fetch(`${HOST}/sdapi/v1/sd-models`, { headers: getHeaders() });
+        const data = await res.json();
+        const selXL = document.getElementById('xl_modelSelect'); selXL.innerHTML = "";
+        data.forEach(m => selXL.appendChild(new Option(m.model_name, m.title)));
+        const selFlux = document.getElementById('flux_modelSelect'); selFlux.innerHTML = "";
+        data.forEach(m => selFlux.appendChild(new Option(m.model_name, m.title)));
+        ['xl', 'flux'].forEach(mode => {
+            const saved = localStorage.getItem('bojroModel_'+mode);
+            if(saved) document.getElementById(mode+'_modelSelect').value = saved;
+        });
+    } catch(e){}
+}
+async function fetchSamplers() {
+    try {
+        const res = await fetch(`${HOST}/sdapi/v1/samplers`, { headers: getHeaders() });
+        const data = await res.json();
+        const selXL = document.getElementById('xl_sampler'); selXL.innerHTML = "";
+        data.forEach(s => selXL.appendChild(new Option(s.name, s.name)));
+        const selFlux = document.getElementById('flux_sampler'); selFlux.innerHTML = "";
+        data.forEach(s => { const opt = new Option(s.name, s.name); if(s.name === "Euler") opt.selected = true; selFlux.appendChild(opt); });
+    } catch(e){}
+}
+async function fetchLoras() {
+    try { const res = await fetch(`${HOST}/sdapi/v1/loras`, { headers: getHeaders() }); allLoras = await res.json(); } catch(e){}
+}
+
+async function fetchVaes() {
+    const slots = [
+        document.getElementById('flux_vae'),
+        document.getElementById('flux_clip'),
+        document.getElementById('flux_t5')
+    ];
+    
+    slots.forEach(s => s.innerHTML = "<option value='Automatic'>Automatic</option>");
+
+    let list = [];
+    try {
+        const res = await fetch(`${HOST}/sdapi/v1/sd-modules`, { headers: getHeaders() });
+        const data = await res.json();
+        if(data && data.length) list = data.map(m => m.model_name);
+    } catch(e) {
+        try {
+            const res2 = await fetch(`${HOST}/sdapi/v1/sd-vae`, { headers: getHeaders() });
+            const data2 = await res2.json();
+            if(data2 && data2.length) list = data2.map(m => m.model_name);
+        } catch(err) {}
+    }
+
+    if(list.length > 0) {
+        slots.forEach(sel => {
+            list.forEach(name => {
+                if (name !== "Automatic" && !Array.from(sel.options).some(o => o.value === name)) {
+                    sel.appendChild(new Option(name, name));
+                }
             });
         });
+    }
 
-        // --- ORIGINAL JAVASCRIPT (FUNCTIONALITY UNCHANGED) ---
-        // --- INITIALIZATION ---
-        const iconEl = document.getElementById('apple-icon');
-        if (iconEl) {
-            const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#1e1e1e"/><path d="M140 370 L372 370 L372 310 L300 310 L300 200 L372 200 L372 140 L140 140 Z" fill="#ff9800"/><path d="M200 140 L200 100 L312 100 L312 140" fill="#ff9800"/></svg>`;
-            iconEl.href = URL.createObjectURL(new Blob([iconSvg], { type: 'image/svg+xml' }));
+    ['flux_vae', 'flux_clip', 'flux_t5'].forEach(id => {
+        const saved = localStorage.getItem('bojro_'+id);
+        if(saved && Array.from(document.getElementById(id).options).some(o => o.value === saved)) {
+            document.getElementById(id).value = saved;
         }
+    });
+    
+    const savedBits = localStorage.getItem('bojro_flux_bits');
+    if(savedBits) document.getElementById('flux_bits').value = savedBits;
+}
 
-        const manifestEl = document.querySelector('#dynamic-manifest');
-        if (manifestEl && iconEl) {
-            const manifest = { "name": "Bojro Resolver", "short_name": "Bojro", "start_url": ".", "display": "standalone", "background_color": "#121212", "theme_color": "#121212", "orientation": "portrait", "icons": [{ "src": iconEl.href, "sizes": "512x512", "type": "image/svg+xml" }] };
-            manifestEl.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], {type: 'application/json'}));
-        }
+// --- LOGIC ---
+window.saveSelection = function(key) {
+    if(key === 'xl') localStorage.setItem('bojroModel_xl', document.getElementById('xl_modelSelect').value);
+    else if(key === 'flux') localStorage.setItem('bojroModel_flux', document.getElementById('flux_modelSelect').value);
+    else if(key === 'flux_bits') localStorage.setItem('bojro_flux_bits', document.getElementById('flux_bits').value);
+}
+window.saveTrident = function() {
+    ['flux_vae', 'flux_clip', 'flux_t5'].forEach(id => localStorage.setItem('bojro_'+id, document.getElementById(id).value));
+}
 
-        // --- DB & GALLERY ---
-        let db;
-        const request = indexedDB.open("BojroDB", 1);
-        request.onupgradeneeded = function(event) {
-            db = event.target.result;
-            db.createObjectStore("images", { keyPath: "id", autoIncrement: true });
-        };
-        request.onsuccess = function(event) { db = event.target.result; loadGallery(); loadHostIp(); }; 
+// --- UNLOAD CHECKPOINT ---
+window.unloadModel = async function(silent = false) {
+    if(!silent && !confirm("Unload current model?")) return;
+    const btns = document.querySelectorAll('.btn-icon');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const res = await fetch(`${HOST}/sdapi/v1/unload-checkpoint`, { method: 'POST', headers: getHeaders() });
+        if(res.ok) {
+            if(!silent) alert("Model Unloaded!");
+        } else throw new Error(res.status);
+    } catch(e) {
+        if(!silent) alert("Failed: " + e.message);
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
+}
 
-        function saveImageToDB(base64) {
-            if(!db) return;
-            const transaction = db.transaction(["images"], "readwrite");
-            transaction.objectStore("images").add({ data: base64, date: new Date().toLocaleString() });
-        }
+async function postOption(payload) { 
+    const res = await fetch(`${HOST}/sdapi/v1/options`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) }); 
+    if(!res.ok) throw new Error("API Error " + res.status);
+}
 
-        window.clearDbGallery = function() {
-            if(confirm("Delete all history?")) {
-                const transaction = db.transaction(["images"], "readwrite");
-                transaction.objectStore("images").clear();
-                loadGallery();
-            }
-        }
+window.setRes = (mode, w, h) => { document.getElementById(`${mode}_width`).value = w; document.getElementById(`${mode}_height`).value = h; }
+window.flipRes = (mode) => {
+    const w = document.getElementById(`${mode}_width`); const h = document.getElementById(`${mode}_height`);
+    const t = w.value; w.value = h.value; h.value = t;
+}
 
-        // --- RESOLUTION SWITCHES (NEW DEFINITIONS) ---
-        window.setResolution = function(w, h) {
-            document.getElementById('width').value = w;
-            document.getElementById('height').value = h;
-        };
-
-        window.flipResolution = function() {
-            const widthInput = document.getElementById('width');
-            const heightInput = document.getElementById('height');
-            
-            const currentW = widthInput.value;
-            const currentH = heightInput.value;
-            
-            widthInput.value = currentH;
-            heightInput.value = currentW;
-        };
-        // --- END RESOLUTION SWITCHES ---
-
-
-        // --- HOST IP PERSISTENCE LOGIC ---
-        function loadHostIp() {
-            const savedIp = localStorage.getItem('bojroHostIp');
-            if (savedIp) {
-                document.getElementById('hostIp').value = savedIp;
-            }
-        }
-
-        function saveHostIp() {
-            const currentIp = document.getElementById('hostIp').value;
-            if (currentIp && currentIp.startsWith('http')) {
-                localStorage.setItem('bojroHostIp', currentIp);
-            }
-        }
-
-        // --- UI TABS ---
-        window.switchTab = function(view) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
-            document.getElementById('view-' + view).classList.remove('hidden');
-            
-            if(view === 'gen') document.querySelectorAll('.tab')[0].classList.add('active');
-            if(view === 'gal') { document.querySelectorAll('.tab')[1].classList.add('active'); loadGallery(); }
-            if(view === 'ana') document.querySelectorAll('.tab')[2].classList.add('active');
-        }
-
-        window.toggleVaeMode = function() {
-            // VAE logic removed from UI
-        }
-
-        // --- GALLERY LOGIC ---
-        function loadGallery() {
-            const grid = document.getElementById('savedGalleryGrid');
-            grid.innerHTML = "";
-            if(!db) return;
-            const store = db.transaction(["images"], "readonly").objectStore("images");
-            store.getAll().onsuccess = function(e) {
-                const images = e.target.result;
-                if(!images || images.length === 0) {
-                    grid.innerHTML = "<div style='text-align:center; color:#666; grid-column:span 3; margin-top:50px;'>Empty History</div>";
-                    return;
+// --- LORA ---
+let activeLoraMode = 'xl';
+window.openLoraModal = (mode) => { activeLoraMode = mode; document.getElementById('loraModal').classList.remove('hidden'); document.getElementById('loraSearch').focus(); window.filterLoras(); }
+window.closeLoraModal = () => document.getElementById('loraModal').classList.add('hidden');
+window.filterLoras = () => {
+    const list = document.getElementById('loraVerticalList'); list.innerHTML = "";
+    const term = document.getElementById('loraSearch').value.toLowerCase();
+    if(allLoras.length === 0) { list.innerHTML = "<div style='padding:20px;text-align:center;color:#777;'>No LoRAs</div>"; return; }
+    allLoras.forEach(l => {
+        if(l.name.toLowerCase().includes(term)) {
+            const d = document.createElement('div'); d.className = 'lora-row';
+            d.innerHTML = `<span>${l.name}</span><span class="lora-status">+</span>`;
+            d.onclick = function() { 
+                const id = activeLoraMode === 'xl' ? 'xl_prompt' : 'flux_prompt';
+                const p = document.getElementById(id); 
+                if(!p.value.includes(`<lora:${l.name}`)) {
+                    p.value += ` <lora:${l.name}:1>`; 
+                    this.querySelector('.lora-status').innerText = "✓"; 
+                    this.querySelector('.lora-status').style.color = "#00e676";
                 }
-                images.reverse().forEach(item => {
-                    const img = document.createElement('img');
-                    img.src = item.data;
-                    img.className = 'gal-thumb';
-                    img.onclick = () => openFullscreen(item.data);
-                    grid.appendChild(img);
-                });
             };
+            list.appendChild(d);
+        }
+    });
+}
+
+function normalize(str) { 
+    if (!str) return "";
+    const noHash = str.split(' [')[0].trim();
+    return noHash.replace(/\\/g, '/').split('/').pop().toLowerCase();
+}
+
+// --- GENERATION ---
+window.generate = async function() {
+    const btn = document.getElementById('genBtn');
+    const spinner = document.getElementById('loadingSpinner');
+    
+    const targetModelTitle = currentMode === 'xl' 
+        ? document.getElementById('xl_modelSelect').value 
+        : document.getElementById('flux_modelSelect').value;
+    
+    if(!targetModelTitle || targetModelTitle === "Link first...") return alert("Please select a model first!");
+
+    btn.disabled = true; 
+    
+    try {
+        let isReady = false;
+        let attempts = 0;
+
+        while (!isReady && attempts < 40) { 
+            const optsReq = await fetch(`${HOST}/sdapi/v1/options`, { headers: getHeaders() });
+            const opts = await optsReq.json();
+            
+            const modelMatch = normalize(opts.sd_model_checkpoint) === normalize(targetModelTitle);
+
+            if (modelMatch) {
+                isReady = true;
+                break;
+            }
+
+            if (attempts % 5 === 0) { 
+                btn.innerText = `ALIGNING SYSTEM... (${attempts})`;
+                await postOption({ 
+                    "sd_model_checkpoint": targetModelTitle,
+                    "forge_unet_storage_dtype": "Automatic (fp16 LoRA)"
+                });
+            }
+
+            attempts++;
+            await new Promise(r => setTimeout(r, 1500));
         }
 
-        let currentFsImage = ""; 
-        window.openFullscreen = function(base64) {
-            currentFsImage = base64;
-            document.getElementById('fsImage').src = base64;
-            document.getElementById('fullScreenModal').classList.remove('hidden');
+        if (!isReady) {
+            btn.disabled = false; btn.innerText = "RETRY";
+            return alert("Timeout: Server refused configuration.");
         }
-        window.closeFsModal = function() { document.getElementById('fullScreenModal').classList.add('hidden'); }
 
-        window.analyzeCurrentFs = function() {
-            window.closeFsModal();
-            window.switchTab('ana');
-            fetch(currentFsImage).then(res => res.blob()).then(blob => {
-                const file = new File([blob], "gallery_image.png", { type: "image/png" });
-                const img = new Image();
-                img.onload = () => {
-                    document.getElementById('anaPreview').src = img.src;
-                    document.getElementById('anaGallery').classList.remove('hidden');
-                    document.getElementById('resOut').innerText = `${img.width} x ${img.height}`;
-                };
-                img.src = URL.createObjectURL(file);
-                extractMetadata(file);
+    } catch(e) {
+        btn.disabled = false; btn.innerText = "ERROR";
+        return alert("Connection Error: " + e.message);
+    }
+
+    // --- STEP 2: START GENERATION & PROGRESS MONITORING ---
+    btn.innerText = "PROCESSING...";
+    document.querySelectorAll('.gen-result').forEach(img => img.remove());
+    spinner.style.display = 'block';
+
+    let payload = {};
+    let overrides = {}; 
+    
+    overrides["forge_inference_memory"] = getVramMapping();
+    overrides["forge_unet_storage_dtype"] = "Automatic (fp16 LoRA)";
+
+    // START PROGRESS POLLING
+    const progressInterval = setInterval(async () => {
+        try {
+            const res = await fetch(`${HOST}/sdapi/v1/progress`, { headers: getHeaders() });
+            const data = await res.json();
+            if (data.state && data.state.sampling_steps > 0) {
+                 btn.innerText = `Step ${data.state.sampling_step}/${data.state.sampling_steps}`;
+            }
+        } catch(e) {}
+    }, 500);
+
+    if(currentMode === 'xl') {
+        overrides["forge_additional_modules"] = [];
+        overrides["sd_vae"] = "Automatic";
+
+        payload = {
+            "prompt": document.getElementById('xl_prompt').value,
+            "negative_prompt": document.getElementById('xl_neg').value,
+            "steps": parseInt(document.getElementById('xl_steps').value),
+            "cfg_scale": parseFloat(document.getElementById('xl_cfg').value),
+            "width": parseInt(document.getElementById('xl_width').value),
+            "height": parseInt(document.getElementById('xl_height').value),
+            "batch_size": parseInt(document.getElementById('xl_batch_size').value), // BATCH SIZE
+            "n_iter": parseInt(document.getElementById('xl_batch_count').value),    // BATCH COUNT
+            "sampler_name": document.getElementById('xl_sampler').value,
+            "scheduler": document.getElementById('xl_scheduler').value,
+            "seed": parseInt(document.getElementById('xl_seed').value),
+            "save_images": true,
+            "override_settings": overrides
+        };
+    } else {
+        const modulesList = [
+            document.getElementById('flux_vae').value,
+            document.getElementById('flux_clip').value,
+            document.getElementById('flux_t5').value
+        ].filter(v => v && v !== "Automatic");
+
+        if (modulesList.length > 0) {
+            overrides["forge_additional_modules"] = modulesList;
+        }
+
+        const bits = document.getElementById('flux_bits').value;
+        if(bits) overrides["forge_unet_storage_dtype"] = bits;
+
+        const distCfg = parseFloat(document.getElementById('flux_distilled').value);
+
+        payload = {
+            "prompt": document.getElementById('flux_prompt').value,
+            "negative_prompt": "",
+            "steps": parseInt(document.getElementById('flux_steps').value),
+            "cfg_scale": parseFloat(document.getElementById('flux_cfg').value),
+            "distilled_cfg_scale": isNaN(distCfg) ? 3.5 : distCfg, 
+            "width": parseInt(document.getElementById('flux_width').value),
+            "height": parseInt(document.getElementById('flux_height').value),
+            "batch_size": parseInt(document.getElementById('flux_batch_size').value), // BATCH SIZE
+            "n_iter": parseInt(document.getElementById('flux_batch_count').value),    // BATCH COUNT
+            "sampler_name": document.getElementById('flux_sampler').value,
+            "scheduler": document.getElementById('flux_scheduler').value,
+            "seed": parseInt(document.getElementById('flux_seed').value),
+            "save_images": true,
+            "override_settings": overrides 
+        };
+    }
+
+    try {
+        const res = await fetch(`${HOST}/sdapi/v1/txt2img`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
+        
+        // Stop polling immediately after response
+        clearInterval(progressInterval);
+        
+        if(!res.ok) throw new Error("Server Error " + res.status);
+        const data = await res.json();
+        if(data.images) {
+            data.images.forEach(b64 => {
+                const finalB64 = "data:image/png;base64," + b64;
+                const img = document.createElement('img');
+                img.src = finalB64;
+                img.className = 'gen-result';
+                img.onclick = () => openFullscreen([finalB64], 0);
+                document.getElementById('gallery').appendChild(img);
+                saveImageToDB(finalB64);
             });
+            if(document.getElementById('autoDlCheck').checked) setTimeout(window.downloadResults, 500);
+            if(data.info) {
+                const info = JSON.parse(data.info);
+                const metaDiv = document.getElementById('metaData');
+                metaDiv.innerText = `Seed: ${info.seed}\nModel: ${info.sd_model_name}`;
+                metaDiv.classList.remove('hidden');
+            }
         }
+    } catch(e) { 
+        clearInterval(progressInterval);
+        alert("Gen Failed: " + e.message); 
+    }
+    
+    spinner.style.display = 'none';
+    btn.disabled = false; btn.innerText = currentMode === 'xl' ? "GENERATE" : "QUANTUM GENERATE";
+}
 
-        // --- LORA ---
-        let allLoras = []; 
-        window.openLoraModal = function() { document.getElementById('loraModal').classList.remove('hidden'); document.getElementById('loraSearch').focus(); }
-        window.closeLoraModal = function() { document.getElementById('loraModal').classList.add('hidden'); }
-        window.filterLoras = function() {
-            const term = document.getElementById('loraSearch').value.toLowerCase();
-            const list = document.getElementById('loraVerticalList');
-            list.innerHTML = "";
-            allLoras.forEach(l => {
-                if(l.name.toLowerCase().includes(term)) {
-                    const row = document.createElement('div');
-                    row.className = 'lora-row';
-                    row.innerHTML = `<span>${l.name}</span> <span style="font-size:20px;">+</span>`;
-                    row.onclick = () => {
-                        const box = document.getElementById('prompt');
-                        if(!box.value.includes(`:1>`)) box.value += ` <lora:${l.name}:1>`;
-                        window.closeLoraModal();
-                    };
-                    list.appendChild(row);
+// --- GALLERY & ANALYZER ---
+function loadGallery() {
+    const grid = document.getElementById('savedGalleryGrid'); grid.innerHTML = "";
+    if(!db) return;
+    db.transaction(["images"], "readonly").objectStore("images").getAll().onsuccess = e => {
+        const imgs = e.target.result;
+        if(!imgs || imgs.length === 0) { grid.innerHTML = "<div style='text-align:center;color:#777;margin-top:20px;grid-column:1/-1;'>No images</div>"; return; }
+        const reversedImgs = imgs.reverse();
+        currentGalleryImages = reversedImgs.map(i => i.data);
+        reversedImgs.forEach((item, index) => {
+            const img = document.createElement('img'); img.src = item.data; img.className = 'gal-thumb';
+            img.onclick = () => openFullscreen(currentGalleryImages, index);
+            grid.appendChild(img);
+        });
+    }
+}
+window.openFullscreen = function(imagesArray, index) {
+    currentGalleryImages = imagesArray; currentGalleryIndex = index;
+    updateLightboxImage();
+    document.getElementById('fullScreenModal').classList.remove('hidden');
+}
+function updateLightboxImage() { if(currentGalleryImages.length > 0) document.getElementById('fsImage').src = currentGalleryImages[currentGalleryIndex]; }
+window.slideImage = function(dir) {
+    if(currentGalleryImages.length === 0) return;
+    currentGalleryIndex += dir;
+    if(currentGalleryIndex < 0) currentGalleryIndex = currentGalleryImages.length - 1;
+    if(currentGalleryIndex >= currentGalleryImages.length) currentGalleryIndex = 0;
+    updateLightboxImage();
+}
+window.downloadCurrent = function() {
+    const src = document.getElementById('fsImage').src;
+    const a = document.createElement('a'); a.href = src; a.download = `Bojro_${Date.now()}.png`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+window.closeFsModal = () => document.getElementById('fullScreenModal').classList.add('hidden');
+
+function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+window.analyzeCurrentFs = () => { window.closeFsModal(); window.switchTab('ana'); fetch(document.getElementById('fsImage').src).then(res => res.blob()).then(processImageForAnalysis); }
+window.handleFileSelect = e => { const file = e.target.files[0]; if(!file) return; processImageForAnalysis(file); }
+async function processImageForAnalysis(blob) {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+        const w = img.width; const h = img.height; const d = gcd(w, h);
+        document.getElementById('resOut').innerText = `${w} x ${h}`;
+        document.getElementById('arOut').innerText = `${w/d}:${h/d}`;
+        document.getElementById('anaPreview').src = url;
+        document.getElementById('anaGallery').classList.remove('hidden');
+        document.getElementById('dateOut').innerText = new Date().toLocaleString();
+    };
+    img.src = url;
+    const text = await readPngMetadata(blob);
+    document.getElementById('anaMeta').innerText = text || "No parameters found.";
+}
+async function readPngMetadata(blob) {
+    const buffer = await blob.arrayBuffer();
+    const view = new DataView(buffer);
+    const decoder = new TextDecoder("utf-8");
+    let offset = 8; 
+    while (offset < buffer.byteLength) {
+        try {
+            const length = view.getUint32(offset);
+            const type = decoder.decode(new Uint8Array(buffer, offset + 4, 4));
+            if (type === 'tEXt') {
+                const data = new Uint8Array(buffer, offset + 8, length);
+                let nullIndex = data.indexOf(0);
+                if (nullIndex > -1) {
+                    const keyword = decoder.decode(data.slice(0, nullIndex));
+                    if (keyword === 'parameters') return decoder.decode(data.slice(nullIndex + 1));
                 }
-            });
-        }
-
-        // --- CONNECTION ---
-        let HOST = "";
-
-        function getHeaders() {
-            return {
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true', 
-                'User-Agent': 'BojroApp'
-            };
-        }
-
-        window.connect = async function() {
-            HOST = document.getElementById('hostIp').value.replace(/\/$/, ""); 
-            const dot = document.getElementById('statusDot');
-            dot.style.background = "yellow"; 
-
-            try {
-                const res = await fetch(`${HOST}/sdapi/v1/sd-models`, { headers: getHeaders() });
-                
-                if (!res.ok) throw new Error("Status: " + res.status);
-
-                dot.classList.remove('err');
-                dot.classList.add('on');
-                dot.style.background = "#00e676"; // Green
-
-                document.getElementById('genBtn').disabled = false;
-                fetchModels(); fetchSamplers(); fetchLoras();
-                
-                // --- HIDDEN SETTINGS UPDATE (Automatic VAE/Bits) ---
-                postOption({ "sd_vae": "Automatic" }, null);
-                postOption({ "forge_unet_storage_dtype": "Automatic" }, null);
-                // ------------------------------
-                
-                saveHostIp(); 
-
-                alert("SUCCESS: Connected!");
-            } catch (e) {
-                dot.classList.add('err');
-                dot.style.background = "#f44336"; 
-                alert("Connection Failed: " + e.message);
             }
-        }
-
-        async function fetchModels() {
-            try {
-                const res = await fetch(`${HOST}/sdapi/v1/sd-models`, { headers: getHeaders() });
-                const models = await res.json();
-                const select = document.getElementById('modelSelect');
-                select.innerHTML = "";
-                models.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.title; opt.text = m.model_name;
-                    select.appendChild(opt);
-                });
-                window.setDefaultModel();
-            } catch(e){}
-        }
-        async function fetchSamplers() {
-            try {
-                const res = await fetch(`${HOST}/sdapi/v1/samplers`, { headers: getHeaders() });
-                const samplers = await res.json();
-                const select = document.getElementById('samplerSelect');
-                select.innerHTML = "";
-                samplers.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.name; opt.text = s.name;
-                    if(s.name === "Euler a") opt.selected = true;
-                    select.appendChild(opt);
-                });
-            } catch(e){}
-        }
-        async function fetchLoras() {
-            try {
-                const res = await fetch(`${HOST}/sdapi/v1/loras`, { headers: getHeaders() });
-                allLoras = await res.json();
-                window.filterLoras();
-            } catch(e){}
-        }
-
-        async function postOption(payload, msg) {
-            const btn = document.getElementById('genBtn');
-            if(msg) { btn.innerText = msg; btn.disabled = true; }
-            try {
-                await fetch(`${HOST}/sdapi/v1/options`, {
-                    method: 'POST', headers: getHeaders(), 
-                    body: JSON.stringify(payload)
-                });
-            } catch (e) { console.error(e); }
-            if(msg) { btn.innerText = "GENERATE"; btn.disabled = false; }
-        }
-
-        window.setDefaultModel = function() {
-            const val = localStorage.getItem('defaultBojroModel');
-            if(val) {
-                const select = document.getElementById('modelSelect');
-                if(Array.from(select.options).some(o=>o.value===val)) select.value = val;
-            }
-        }
-
-        // --- GENERATION ---
-        window.generate = async function() {
-            const btn = document.getElementById('genBtn');
-            const spinner = document.getElementById('loadingSpinner');
-            const gallery = document.getElementById('gallery');
-            const metaDiv = document.getElementById('metaData');
-            const dlBtn = document.getElementById('dlBtn');
-
-            btn.disabled = true; btn.innerText = "PROCESSING...";
-            dlBtn.classList.add('hidden');
-            const oldImages = gallery.querySelectorAll('.gen-result');
-            oldImages.forEach(img => img.remove());
-            spinner.style.display = 'block'; 
-            metaDiv.classList.add('hidden');
-
-            try {
-                const seedVal = parseInt(document.getElementById('seed').value);
-                const payload = {
-                    "prompt": document.getElementById('prompt').value,
-                    "negative_prompt": document.getElementById('neg').value,
-                    "steps": parseInt(document.getElementById('steps').value),
-                    "cfg_scale": parseFloat(document.getElementById('cfg').value),
-                    "width": parseInt(document.getElementById('width').value),
-                    "height": parseInt(document.getElementById('height').value),
-                    "batch_size": parseInt(document.getElementById('batchSize').value),
-                    "n_iter": parseInt(document.getElementById('batchCount').value),
-                    "sampler_name": document.getElementById('samplerSelect').value,
-                    "scheduler": document.getElementById('schedulerSelect').value,
-                    "seed": seedVal,
-                    "save_images": true
-                };
-
-                const res = await fetch(`${HOST}/sdapi/v1/txt2img`, {
-                    method: 'POST', headers: getHeaders(),
-                    body: JSON.stringify(payload)
-                });
-
-                if(!res.ok) throw new Error("Gen Error: " + res.status);
-                const data = await res.json();
-                
-                if (data.images) {
-                    data.images.forEach(b64 => {
-                        const finalB64 = "data:image/png;base64," + b64;
-                        const img = document.createElement('img');
-                        img.src = finalB64;
-                        img.className = 'gen-result';
-                        gallery.appendChild(img);
-                        
-                        saveImageToDB(finalB64); // Save to DB
-                    });
-                    dlBtn.classList.remove('hidden');
-                    
-                    const autoCheck = document.getElementById('autoDlCheck');
-                    if(autoCheck && autoCheck.checked) setTimeout(window.downloadResults, 500); 
-                    
-                    if(data.info) {
-                        const info = JSON.parse(data.info);
-                        metaDiv.innerText = `Seed: ${info.seed}\nModel: ${info.sd_model_name}\nSampler: ${payload.sampler_name}`;
-                        metaDiv.classList.remove('hidden');
-                    }
-                }
-            } catch (e) { alert("Generation Failed:\n" + e.message); }
-            
-            spinner.style.display = 'none'; 
-            btn.disabled = false; 
-            btn.innerText = "GENERATE";
-        }
-
-        // --- DOWNLOADER ---
-        window.downloadResults = async function() {
-            const images = document.querySelectorAll('.gen-result');
-            if(images.length === 0) return alert("No images to download!");
-            const now = new Date();
-            const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19); 
-            
-            for (let i = 0; i < images.length; i++) {
-                const img = images[i];
-                try {
-                    const res = await fetch(img.src);
-                    const blob = await res.blob();
-                    const filename = `Strateon_${timestamp}_${i + 1}.png`;
-                    const file = new File([blob], filename, { type: "image/png" });
-                    const blobUrl = URL.createObjectURL(file);
-                    const link = document.createElement('a');
-                    link.href = blobUrl;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-                } catch (e) { alert("Save Failed: " + e.message); }
-            }
-        }
-
-        // --- ANALYZER ---
-        function gcd(a, b) { return b ? gcd(b, a % b) : a; }
-
-        window.handleFileSelect = function(event) {
-            const previewEl = document.getElementById('anaPreview');
-            const metaEl = document.getElementById('anaMeta');
-            const file = event.target.files[0];
-            if (!file) return;
-
-            metaEl.innerText = "Analyzing...";
-            document.getElementById('dateOut').innerText = new Date(file.lastModified).toLocaleString();
-
-            const img = new Image();
-            img.onload = () => {
-                const w = img.width, h = img.height, d = gcd(w, h);
-                document.getElementById('resOut').innerText = `${w} x ${h}`;
-                document.getElementById('arOut').innerText = `${w/d}:${h/d}`;
-                previewEl.src = img.src;
-                document.getElementById('anaGallery').classList.remove('hidden');
-            };
-            img.src = URL.createObjectURL(file);
-            extractMetadata(file);
-        }
-
-        async function extractMetadata(file) {
-            const metaEl = document.getElementById('anaMeta');
-            const decoder = new TextDecoder('utf-8');
-            const buffer = await file.arrayBuffer();
-            const dataView = new DataView(buffer);
-            let offset = 8, metadata = [];
-            
-            while (offset < buffer.byteLength) {
-                try {
-                    const len = dataView.getUint32(offset, false);
-                    const type = decoder.decode(new Uint8Array(buffer, offset + 4, 4));
-                    if (type === 'tEXt' || type === 'iTXt') {
-                        const data = new Uint8Array(buffer, offset + 8, len);
-                        let keyEnd = data.indexOf(0x00);
-                        let contentStart = keyEnd + 1;
-                        if(type==='iTXt') { contentStart+=2; contentStart = data.indexOf(0x00, contentStart) + 1; contentStart = data.indexOf(0x00, contentStart) + 1; }
-                        metadata.push(decoder.decode(data.slice(contentStart)));
-                    }
-                    offset += len + 12;
-                } catch (e) { break; }
-            }
-            
-            if (metadata.length > 0) metaEl.innerText = metadata.join('\n\n');
-            else {
-                const view = new Uint8Array(buffer);
-                const idx = findBytes(view, new TextEncoder().encode('parameters'));
-                if(idx !== -1) {
-                    let text = decoder.decode(view.subarray(idx, Math.min(view.length, idx + 2000)));
-                    metaEl.innerText = text.replace(/[^\x20-\x7E\n]/g, '');
-                } else metaEl.innerText = "No metadata found.";
-            }
-        }
-        function findBytes(h, n) { for(let i=0;i<h.length-n.length;i++){let f=true;for(let j=0;j<n.length;j++)if(h[i+j]!==n[j]){f=false;break;}if(f)return i;}return -1;}
-
-        // --- LISTENERS ---
-        const uploadBox = document.getElementById('uploadBox');
-        if (uploadBox) {
-            uploadBox.addEventListener('drop', (e) => { 
-                e.preventDefault();
-                document.getElementById('imageUpload').files = e.dataTransfer.files; 
-                window.handleFileSelect({ target: { files: e.dataTransfer.files } }); 
-            });
-        }
-
-        function loadAutoDlState() {
-            const autoCheck = document.getElementById('autoDlCheck');
-            if (autoCheck) autoCheck.checked = localStorage.getItem('bojroAutoSave') === 'true';
-        }
-        window.saveAutoDlState = function() {
-            localStorage.setItem('bojroAutoSave', document.getElementById('autoDlCheck').checked);
-        }
-        loadAutoDlState();
+            offset += length + 12;
+        } catch (e) { break; }
+    }
+    return null;
+}
+function loadAutoDlState() { const c = document.getElementById('autoDlCheck'); if(c) c.checked = localStorage.getItem('bojroAutoSave') === 'true'; }
+window.saveAutoDlState = () => localStorage.setItem('bojroAutoSave', document.getElementById('autoDlCheck').checked);
+loadAutoDlState();

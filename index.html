@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Bojro Flux | Thunder Edition</title>
+    <title>Bojro | Hybrid Final</title>
     
     <meta name="theme-color" content="#0f0518">
     <meta name="mobile-web-app-capable" content="yes">
@@ -12,136 +12,202 @@
     <link rel="manifest" id="dynamic-manifest">
     <link rel="apple-touch-icon" id="apple-icon">
     
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="style.css">
-    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div class="container">
-        <!-- HEADER -->
         <div class="header-row">
-            <h2>BOJRO RESOLVER</h2>
+            <h2 id="appTitle">BOJRO RESOLVER</h2>
             <button class="btn-icon" id="themeToggle" onclick="toggleTheme()">
                 <i data-lucide="sun"></i>
             </button>
         </div>
 
-        <div id="installBanner" class="hidden">⬇️ INSTALL APP</div>
-
-        <!-- GENERATOR VIEW -->
         <div id="view-gen">
-            
-            <div class="glass-box" style="padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
-                    <i data-lucide="wifi" size="16" style="color:var(--text-muted)"></i>
-                    <input type="text" id="hostIp" placeholder="Enter WebUI URL..." style="background: transparent; border: none; padding: 0; font-family: monospace; font-size: 12px;">
+            <div class="glass-box" style="padding: 10px 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                        <i data-lucide="wifi" size="16" style="color:var(--text-muted)"></i>
+                        <input type="text" id="hostIp" placeholder="http://192.168.0.x:7860" style="background: transparent; border: none; padding: 0; font-family: monospace; font-size: 12px; width: 100%;">
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button onclick="connect()" class="btn-small" style="font-size: 10px;">LINK</button>
+                        <div id="statusDot" class="indicator"></div>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <button onclick="connect()" class="btn-small" style="font-size: 10px;">LINK</button>
-                    <div id="statusDot" class="indicator"></div>
+                <div class="row" style="border-top: 1px solid var(--input-border); padding-top: 10px;">
+                    <div class="col">
+                        <label><i data-lucide="memory-stick" size="12"></i> VRAM Profile</label>
+                        <select id="vramProfile" style="padding: 8px; font-size: 11px;">
+                            <option value="low">Low VRAM (< 12GB)</option>
+                            <option value="mid" selected>Standard (12GB)</option>
+                            <option value="high">High VRAM (> 12GB)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div class="glass-box">
+            <div class="mode-switcher">
+                <div class="mode-btn active" id="btn-xl" onclick="setMode('xl')">SDXL</div>
+                <div class="mode-btn" id="btn-flux" onclick="setMode('flux')">FLUX</div>
+            </div>
+
+            <div class="glass-box" id="global-model-box">
                 <div class="col">
-                    <label><i data-lucide="cpu" size="12"></i> Checkpoint</label>
+                    <label><i data-lucide="cpu" size="12"></i> Active Checkpoint</label>
+                    <div class="row" id="row-xl-model">
+                        <select id="xl_modelSelect" onchange="saveSelection('xl')"><option>Link first...</option></select>
+                        <button onclick="document.getElementById('xl_modelSelect').value = localStorage.getItem('bojroModel_xl')" class="btn-icon"><i data-lucide="save" size="14"></i></button>
+                    </div>
+                    <div class="row hidden" id="row-flux-model">
+                        <select id="flux_modelSelect" onchange="saveSelection('flux')"><option>Link first...</option></select>
+                        <button onclick="document.getElementById('flux_modelSelect').value = localStorage.getItem('bojroModel_flux')" class="btn-icon"><i data-lucide="save" size="14"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mode-xl-container">
+                <div class="col" style="margin-bottom: 20px;">
+                    <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                    <textarea id="xl_prompt" rows="3">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish, masterpiece, best quality</textarea>
+                    <button onclick="openLoraModal('xl')" class="btn-small dashed">+ ADD LORA</button>
+                    <label><i data-lucide="shield-off" size="12"></i> Negative</label>
+                    <textarea id="xl_neg" style="min-height: 50px;">bad quality,worst quality,worst detail</textarea>
+                </div>
+                <div class="glass-box">
                     <div class="row">
-                        <select id="modelSelect" onchange="changeModel()"><option>Link first...</option></select>
-                        <button onclick="setDefaultModel()" class="btn-icon" style="width: 44px; height: 44px;"><i data-lucide="star" size="14"></i></button>
+                        <div class="col"><label>Sampler</label><select id="xl_sampler"><option>Euler a</option></select></div>
+                        <div class="col"><label>Schedule</label><select id="xl_scheduler"><option>Karras</option></select></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Steps</label><input type="number" id="xl_steps" value="20"></div>
+                        <div class="col"><label>CFG</label><input type="number" id="xl_cfg" value="7"></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Width</label><input type="number" id="xl_width" value="768" step="64"></div>
+                        <div class="col"><label>Height</label><input type="number" id="xl_height" value="1365" step="64"></div>
+                    </div>
+                    <div id="resSelector" style="margin-top: 15px;">
+                        <label>Aspect Ratio</label>
+                        <div id="resGrid">
+                            <div class="mp-label">1MP</div>
+                            <div class="res-switch" onclick="setRes('xl', 1024, 1024)">1:1</div>
+                            <div class="res-switch" onclick="setRes('xl', 1254, 836)">3:2</div>
+                            <div class="res-switch" onclick="setRes('xl', 1182, 887)">4:3</div>
+                            <div class="res-switch" onclick="setRes('xl', 1365, 768)">16:9</div>
+                            <div class="res-switch" onclick="setRes('xl', 1564, 670)">21:9</div>
+                            <div class="mp-label">2MP</div>
+                            <div class="res-switch" onclick="setRes('xl', 1448, 1448)">1:1</div>
+                            <div class="res-switch" onclick="setRes('xl', 1773, 1182)">3:2</div>
+                            <div class="res-switch" onclick="setRes('xl', 1672, 1254)">4:3</div>
+                            <div class="res-switch" onclick="setRes('xl', 1936, 1089)">16:9</div>
+                            <div class="res-switch" onclick="flipRes('xl')"><i data-lucide="arrow-left-right" size="12"></i></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" style="margin-top: 15px;">
+                        <div class="col"><label>Batch Size</label><input type="number" id="xl_batch_size" value="1" min="1"></div>
+                        <div class="col"><label>Batch Count</label><input type="number" id="xl_batch_count" value="1" min="1"></div>
+                        <div class="col"><label>Seed</label><div class="row"><input type="number" id="xl_seed" value="-1"><button class="btn-icon" onclick="document.getElementById('xl_seed').value='-1'"><i data-lucide="dices" size="14"></i></button></div></div>
                     </div>
                 </div>
-                
-                
             </div>
 
-            <div class="col" style="margin-bottom: 20px;">
-                <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
-                <textarea id="prompt" rows="3">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish,masterpiece,best quality,</textarea>
-                
-                <button onclick="openLoraModal()" class="btn-small" style="width: 100%; border: 1px dashed var(--input-border); margin: 5px 0;">+ SELECT LORA</button>
-                
-                <label><i data-lucide="shield-off" size="12"></i> Negative</label>
-                <textarea id="neg" style="min-height: 50px;">bad quality,worst quality,worst detail,</textarea>
-            </div>
+            <div id="mode-flux-container" class="hidden">
+                <div class="info-note">
+                    <i data-lucide="info" size="12"></i>
+                    <span>Optimized for Flux GGUF Special Override.</span>
+                </div>
 
-            <div class="glass-box">
-                <div class="row">
-                    <div class="col">
-                        <label>Sampler</label>
-                        <select id="samplerSelect"><option>Euler a</option></select>
+                <div class="glass-box">
+                    <div class="col" style="margin-bottom: 15px;">
+                        <label>VAE / Text Encoders</label>
+                        <div class="row mb-5"><span class="label-tag c-p">VAE</span><select id="flux_vae" class="trident-select" onchange="saveTrident()"><option value="">Automatic</option></select></div>
+                        <div class="row mb-5"><span class="label-tag c-s">CLIP</span><select id="flux_clip" class="trident-select" onchange="saveTrident()"><option value="">None</option></select></div>
+                        <div class="row"><span class="label-tag c-m">T5</span><select id="flux_t5" class="trident-select" onchange="saveTrident()"><option value="">None</option></select></div>
                     </div>
                     <div class="col">
-                        <label>Schedule</label>
-                        <select id="schedulerSelect"><option>Karras</option></select>
+                        <label>Low Bits</label>
+                        <select id="flux_bits" onchange="saveSelection('flux_bits')">
+                            <option value="Automatic (fp16 LoRA)" selected>Automatic (fp16 LoRA)</option>
+                            <option value="Automatic">Automatic</option>
+                            <option value="bnb-nf4">bnb-nf4</option>
+                            <option value="bnb-nf4 (fp16 LoRA)">bnb-nf4 (fp16 LoRA)</option>
+                            <option value="float8-e4m3fn">float8-e4m3fn</option>
+                            <option value="float8-e4m3fn (fp16 LoRA)">float8-e4m3fn (fp16 LoRA)</option>
+                            <option value="bnb-fp4">bnb-fp4</option>
+                            <option value="bnb-fp4 (fp16 LoRA)">bnb-fp4 (fp16 LoRA)</option>
+                            <option value="float8-e5m2">float8-e5m2</option>
+                            <option value="float8-e5m2 (fp16 LoRA)">float8-e5m2 (fp16 LoRA)</option>
+                        </select>
                     </div>
                 </div>
 
-                <div class="row" style="margin-top: 10px;">
-                    <div class="col"><label>Steps</label><input type="number" id="steps" value="20"></div>
-                    <div class="col"><label>CFG</label><input type="number" id="cfg" value="7"></div>
+                <div class="col" style="margin-bottom: 20px;">
+                    <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                    <textarea id="flux_prompt" rows="3">A cinematic shot of a futuristic cyberpunk street, neon lights, rain, highly detailed, 8k, photorealistic, masterpiece</textarea>
+                    <button onclick="openLoraModal('flux')" class="btn-small dashed">+ ADD LORA</button>
                 </div>
-
-                <div class="row" style="margin-top: 10px;">
-                    <div class="col"><label>Width</label><input type="number" id="width" value="768" step="64"></div>
-                    <div class="col"><label>Height</label><input type="number" id="height" value="1365" step="64"></div>
-                </div>
-
-                <!-- RESOLUTION GRID (Styled) -->
-                <div id="resSelector" style="margin-top: 15px;">
-                    <label>Aspect Ratio</label>
-                    <div id="resGrid">
-                        <!-- 1MP -->
-                        <div class="mp-label">1MP</div>
-                        <div class="res-switch" onclick="setResolution(1024, 1024)">1:1</div>
-                        <div class="res-switch" onclick="setResolution(1254, 836)">3:2</div>
-                        <div class="res-switch" onclick="setResolution(1182, 887)">4:3</div>
-                        <div class="res-switch" onclick="setResolution(1365, 768)">16:9</div>
-                        <div class="res-switch" onclick="setResolution(1564, 670)">21:9</div>
-                        
-                        <!-- 2MP -->
-                        <div class="mp-label">2MP</div>
-                        <div class="res-switch" onclick="setResolution(1448, 1448)">1:1</div>
-                        <div class="res-switch" onclick="setResolution(1773, 1182)">3:2</div>
-                        <div class="res-switch" onclick="setResolution(1672, 1254)">4:3</div>
-                        <div class="res-switch" onclick="setResolution(1936, 1089)">16:9</div>
-                        <div class="res-switch" onclick="flipResolution()"><i data-lucide="arrow-left-right" size="12"></i></div>
-                    </div>
-                </div>
-
-                <div class="row" style="margin-top: 15px;">
-                    <div class="col"><label>Batch</label><input type="number" id="batchSize" value="1"></div>
-                    <div class="col"><label>Count</label><input type="number" id="batchCount" value="1"></div>
-                </div>
-
-                <div class="col" style="margin-top: 10px;">
-                    <label>Seed</label>
+                <div class="glass-box">
                     <div class="row">
-                        <input type="number" id="seed" value="-1" placeholder="-1">
-                        <button onclick="document.getElementById('seed').value = '-1'" class="btn-icon" style="width: 44px;"><i data-lucide="dices" size="16"></i></button>
+                        <div class="col"><label>Sampler</label><select id="flux_sampler"><option>Euler</option></select></div>
+                        <div class="col"><label>Schedule</label><select id="flux_scheduler"><option>Simple</option><option>Beta</option></select></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Steps</label><input type="number" id="flux_steps" value="20"></div>
+                        <div class="col"><label>CFG</label><input type="number" id="flux_cfg" value="1.0"></div>
+                        <div class="col"><label>Distilled</label><input type="number" id="flux_distilled" value="3.5"></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Width</label><input type="number" id="flux_width" value="1024" step="64"></div>
+                        <div class="col"><label>Height</label><input type="number" id="flux_height" value="1024" step="64"></div>
+                    </div>
+                    <div id="resSelector" style="margin-top: 15px;">
+                        <label>Aspect Ratio</label>
+                        <div id="resGrid">
+                            <div class="mp-label">1MP</div>
+                            <div class="res-switch" onclick="setRes('flux', 1024, 1024)">1:1</div>
+                            <div class="res-switch" onclick="setRes('flux', 896, 1152)">3:4</div>
+                            <div class="res-switch" onclick="setRes('flux', 1152, 896)">4:3</div>
+                            <div class="res-switch" onclick="setRes('flux', 832, 1216)">9:16</div>
+                            <div class="res-switch" onclick="setRes('flux', 1216, 832)">16:9</div>
+                            <div class="mp-label">2MP</div>
+                            <div class="res-switch" onclick="setRes('flux', 1440, 1440)">1:1</div>
+                            <div class="res-switch" onclick="setRes('flux', 1088, 1920)">9:16</div>
+                            <div class="res-switch" onclick="setRes('flux', 1920, 1088)">16:9</div>
+                            <div class="res-switch" onclick="setRes('flux', 1280, 1536)">4:5</div>
+                            <div class="res-switch" onclick="flipRes('flux')"><i data-lucide="arrow-left-right" size="12"></i></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" style="margin-top: 15px;">
+                        <div class="col"><label>Batch Size</label><input type="number" id="flux_batch_size" value="1" min="1"></div>
+                        <div class="col"><label>Batch Count</label><input type="number" id="flux_batch_count" value="1" min="1"></div>
+                        <div class="col"><label>Seed</label><div class="row"><input type="number" id="flux_seed" value="-1"><button class="btn-icon" onclick="document.getElementById('flux_seed').value='-1'"><i data-lucide="dices" size="14"></i></button></div></div>
                     </div>
                 </div>
             </div>
 
-            <button id="genBtn" onclick="generate()">GENERATE</button>
+            <button onclick="unloadModel()" class="btn-small" style="width: 100%; margin-bottom: 10px; margin-top: 20px; background: rgba(244, 67, 54, 0.15); border: 1px solid rgba(244, 67, 54, 0.3); color: #f44336;">
+                <i data-lucide="trash-2" size="14" style="vertical-align: -2px; margin-right: 6px;"></i> UNLOAD MODEL (CLEAR VRAM)
+            </button>
+
+            <button id="genBtn" onclick="generate()">INITIALIZE</button>
 
             <div class="row" style="margin-top: 15px; justify-content: center;">
                 <input type="checkbox" id="autoDlCheck" onchange="saveAutoDlState()" style="width: 16px; height: 16px;">
                 <label for="autoDlCheck" style="margin: 0; color: var(--text-main);">Auto-Save Images</label>
             </div>
-
             <div id="gallery"><div class="spinner" id="loadingSpinner"></div></div>
-            <button id="dlBtn" class="btn-small hidden" onclick="downloadResults()" style="width:100%; margin-top:10px; background:var(--accent-secondary); color:white; padding:15px;">DOWNLOAD ALL</button>
             <div id="metaData" class="glass-box hidden" style="font-family: monospace; font-size: 10px; color: var(--text-muted);"></div>
         </div>
 
-        <!-- GALLERY VIEW -->
         <div id="view-gal" class="hidden">
             <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
                 <label style="font-size: 14px; color: var(--text-main);">HISTORY</label>
@@ -152,7 +218,6 @@
             </div>
         </div>
 
-        <!-- ANALYZER VIEW -->
         <div id="view-ana" class="hidden">
             <label for="imageUpload">
                 <div id="uploadBox">
@@ -161,81 +226,47 @@
                 </div>
             </label>
             <input type="file" id="imageUpload" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
-            
             <div class="glass-box" style="margin-top: 20px;">
                 <div class="row">
-                    <div class="col">
-                        <label>Resolution</label>
-                        <div id="resOut" style="font-weight: bold; color: var(--text-main);">-- x --</div>
-                    </div>
-                    <div class="col">
-                        <label>Ratio</label>
-                        <div id="arOut" style="font-weight: bold; color: var(--text-main);">--</div>
-                    </div>
-                </div>
-                <div style="margin-top: 10px;">
-                    <label>Date</label>
-                    <div id="dateOut" style="font-size: 12px; color: var(--text-main);">N/A</div>
+                    <div class="col"><label>Resolution</label><div id="resOut" style="font-weight: bold;">-- x --</div></div>
+                    <div class="col"><label>Ratio</label><div id="arOut" style="font-weight: bold;">--</div></div>
                 </div>
             </div>
-
             <div id="anaGallery" class="hidden" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--glass-border);">
                 <img id="anaPreview" style="width: 100%; display: block;">
             </div>
-            
             <div style="margin-top: 15px;">
                 <label>Metadata</label>
                 <div id="anaMeta" class="glass-box" style="min-height: 100px; font-family: monospace; font-size: 10px; color: var(--text-muted); word-break: break-all;">Load image...</div>
             </div>
         </div>
-
     </div>
 
-    <!-- MODALS -->
     <div id="loraModal" class="modal hidden">
         <div class="modal-content">
-            <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn" style="color:var(--text-main); font-size:24px;">×</button></div>
+            <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn">×</button></div>
             <input type="text" id="loraSearch" placeholder="Search..." onkeyup="filterLoras()">
             <div id="loraVerticalList"></div>
         </div>
     </div>
-
     <div id="fullScreenModal" class="modal hidden">
-        <img id="fsImage" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px;">
-        <div class="row" style="position: absolute; bottom: 30px; gap: 15px;">
+        <div class="lightbox-container">
+            <button class="nav-arrow left" onclick="slideImage(-1)"><i data-lucide="chevron-left"></i></button>
+            <img id="fsImage" class="lightbox-img">
+            <button class="nav-arrow right" onclick="slideImage(1)"><i data-lucide="chevron-right"></i></button>
+        </div>
+        <div class="lightbox-controls">
             <button onclick="closeFsModal()" class="btn-small" style="background: #333;">CLOSE</button>
+            <button onclick="downloadCurrent()" class="btn-small" style="background: var(--accent-secondary);">DOWNLOAD</button>
             <button onclick="analyzeCurrentFs()" class="btn-small" style="background: var(--accent-primary);">ANALYZE</button>
         </div>
     </div>
 
-    <!-- MAGIC NAV -->
-    <div class="nav-wrapper">
-        <div class="magic-nav">
-            <ul class="magic-list">
-                <div id="indicator" class="indicator-ball" style="transform: translateX(0);">
-                    <div class="curve-left"></div>
-                    <div class="curve-right"></div>
-                </div>
-                <!-- Note: 'tab' class preserved for JS functionality -->
-                <li class="tab active" onclick="switchTab('gen')">
-                    <a class="magic-link">
-                        <span class="magic-icon"><i data-lucide="zap"></i></span>
-                        <span class="magic-text">GEN</span>
-                    </a>
-                </li>
-                <li class="tab" onclick="switchTab('gal')">
-                    <a class="magic-link">
-                        <span class="magic-icon"><i data-lucide="image"></i></span>
-                        <span class="magic-text">GAL</span>
-                    </a>
-                </li>
-                <li class="tab" onclick="switchTab('ana')">
-                    <a class="magic-link">
-                        <span class="magic-icon"><i data-lucide="scan-line"></i></span>
-                        <span class="magic-text">ANA</span>
-                    </a>
-                </li>
-            </ul>
+    <div class="dock-wrapper">
+        <div class="glass-dock">
+            <div class="dock-item active" onclick="switchTab('gen')"><i data-lucide="zap"></i><span>GEN</span></div>
+            <div class="dock-item" onclick="switchTab('gal')"><i data-lucide="image"></i><span>GAL</span></div>
+            <div class="dock-item" onclick="switchTab('ana')"><i data-lucide="scan-line"></i><span>ANA</span></div>
         </div>
     </div>
 
