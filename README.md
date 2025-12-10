@@ -1,6 +1,6 @@
 # Resolver: Native Android Client for WebUI Forge (SDXL & Flux)
 
-![License](https://img.shields.io/github/license/bojrodev/webui-forge-android-webapp)
+![License](https://img.shields.io/badge/License-GPLv3-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Android-green)
 ![Tech](https://img.shields.io/badge/Tech-Capacitor%20%7C%20VanillaJS-blue)
 
