@@ -1,0 +1,15 @@
+{
+  "appId": "com.resolver.client",
+  "appName": "Resolver",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["192.168.*.*", "10.0.0.*", "*"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

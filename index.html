@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Resolver | Hybrid Final</title>
+    
+    <meta name="theme-color" content="#0f0518">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3616/3616929.png">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-row">
+            <h2 id="appTitle">RESOLVER</h2>
+            <button class="btn-icon" id="themeToggle" onclick="toggleTheme()">
+                <i data-lucide="sun"></i>
+            </button>
+        </div>
+
+        <div id="view-gen">
+            <div class="glass-box" style="padding: 10px 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                        <i data-lucide="wifi" size="16" style="color:var(--text-muted)"></i>
+                        <input type="text" id="hostIp" placeholder="http://192.168.0.x:7860" style="background: transparent; border: none; padding: 0; font-family: monospace; font-size: 12px; width: 100%;">
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button onclick="connect()" class="btn-small" style="font-size: 10px;">LINK</button>
+                        <div id="statusDot" class="indicator"></div>
+                    </div>
+                </div>
+                <div class="row" style="border-top: 1px solid var(--input-border); padding-top: 10px;">
+                    <div class="col">
+                        <label><i data-lucide="memory-stick" size="12"></i> VRAM Profile</label>
+                        <select id="vramProfile" style="padding: 8px; font-size: 11px;">
+                            <option value="low">Low VRAM (< 12GB)</option>
+                            <option value="mid" selected>Standard (12GB)</option>
+                            <option value="high">High VRAM (> 12GB)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mode-switcher">
+                <div class="mode-btn active" id="btn-xl" onclick="setMode('xl')">SDXL</div>
+                <div class="mode-btn" id="btn-flux" onclick="setMode('flux')">FLUX</div>
+            </div>
+
+            <div class="glass-box" id="global-model-box">
+                <div class="col">
+                    <label><i data-lucide="cpu" size="12"></i> Active Checkpoint</label>
+                    <div class="row" id="row-xl-model">
+                        <select id="xl_modelSelect" onchange="saveSelection('xl')"><option>Link first...</option></select>
+                        <button onclick="document.getElementById('xl_modelSelect').value = localStorage.getItem('bojroModel_xl')" class="btn-icon"><i data-lucide="save" size="14"></i></button>
+                    </div>
+                    <div class="row hidden" id="row-flux-model">
+                        <select id="flux_modelSelect" onchange="saveSelection('flux')"><option>Link first...</option></select>
+                        <button onclick="document.getElementById('flux_modelSelect').value = localStorage.getItem('bojroModel_flux')" class="btn-icon"><i data-lucide="save" size="14"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mode-xl-container">
+                <div class="col" style="margin-bottom: 20px;">
+                    <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                    <textarea id="xl_prompt" rows="3">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish, masterpiece, best quality</textarea>
+                    <button onclick="openLoraModal('xl')" class="btn-small dashed">+ ADD LORA</button>
+                    <label><i data-lucide="shield-off" size="12"></i> Negative</label>
+                    <textarea id="xl_neg" style="min-height: 50px;">bad quality,worst quality,worst detail</textarea>
+                </div>
+                <div class="glass-box">
+                    <div class="row">
+                        <div class="col"><label>Sampler</label><select id="xl_sampler"><option>Euler a</option></select></div>
+                        <div class="col"><label>Schedule</label><select id="xl_scheduler"><option>Karras</option></select></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Steps</label><input type="number" id="xl_steps" value="20"></div>
+                        <div class="col"><label>CFG</label><input type="number" id="xl_cfg" value="7"></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Width</label><input type="number" id="xl_width" value="1024" step="64"></div>
+                        <div class="col"><label>Height</label><input type="number" id="xl_height" value="1024" step="64"></div>
+                    </div>
+                    <div id="resSelector" style="margin-top: 15px;">
+                        <label>Aspect Ratio</label>
+                        <div id="resGrid">
+                            <div class="mp-label">1MP</div>
+                            <div class="res-switch" onclick="setRes('xl', 1024, 1024)">1:1</div>
+                            <div class="res-switch" onclick="setRes('xl', 1254, 836)">3:2</div>
+                            <div class="res-switch" onclick="setRes('xl', 1182, 887)">4:3</div>
+                            <div class="res-switch" onclick="setRes('xl', 1365, 768)">16:9</div>
+                            <div class="res-switch" onclick="setRes('xl', 1564, 670)">21:9</div>
+                            <div class="mp-label">2MP</div>
+                            <div class="res-switch" onclick="setRes('xl', 1448, 1448)">1:1</div>
+                            <div class="res-switch" onclick="setRes('xl', 1773, 1182)">3:2</div>
+                            <div class="res-switch" onclick="setRes('xl', 1672, 1254)">4:3</div>
+                            <div class="res-switch" onclick="setRes('xl', 1936, 1089)">16:9</div>
+                            <div class="res-switch" onclick="flipRes('xl')"><i data-lucide="arrow-left-right" size="12"></i></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" style="margin-top: 15px;">
+                        <div class="col"><label>Batch Size</label><input type="number" id="xl_batch_size" value="1" min="1"></div>
+                        <div class="col"><label>Batch Count</label><input type="number" id="xl_batch_count" value="1" min="1"></div>
+                        <div class="col"><label>Seed</label><div class="row"><input type="number" id="xl_seed" value="-1"><button class="btn-icon" onclick="document.getElementById('xl_seed').value='-1'"><i data-lucide="dices" size="14"></i></button></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mode-flux-container" class="hidden">
+                <div class="info-note">
+                    <i data-lucide="info" size="12"></i>
+                    <span>Optimized for Flux GGUF Special Override.</span>
+                </div>
+
+                <div class="glass-box">
+                    <div class="col" style="margin-bottom: 15px;">
+                        <label>VAE / Text Encoders</label>
+                        <div class="row mb-5"><span class="label-tag c-p">VAE</span><select id="flux_vae" class="trident-select" onchange="saveTrident()"><option value="">Automatic</option></select></div>
+                        <div class="row mb-5"><span class="label-tag c-s">CLIP</span><select id="flux_clip" class="trident-select" onchange="saveTrident()"><option value="">None</option></select></div>
+                        <div class="row"><span class="label-tag c-m">T5</span><select id="flux_t5" class="trident-select" onchange="saveTrident()"><option value="">None</option></select></div>
+                    </div>
+                    <div class="col">
+                        <label>Low Bits</label>
+                        <select id="flux_bits" onchange="saveSelection('flux_bits')">
+                            <option value="Automatic (fp16 LoRA)" selected>Automatic (fp16 LoRA)</option>
+                            <option value="Automatic">Automatic</option>
+                            <option value="bnb-nf4">bnb-nf4</option>
+                            <option value="bnb-nf4 (fp16 LoRA)">bnb-nf4 (fp16 LoRA)</option>
+                            <option value="float8-e4m3fn">float8-e4m3fn</option>
+                            <option value="float8-e4m3fn (fp16 LoRA)">float8-e4m3fn (fp16 LoRA)</option>
+                            <option value="bnb-fp4">bnb-fp4</option>
+                            <option value="bnb-fp4 (fp16 LoRA)">bnb-fp4 (fp16 LoRA)</option>
+                            <option value="float8-e5m2">float8-e5m2</option>
+                            <option value="float8-e5m2 (fp16 LoRA)">float8-e5m2 (fp16 LoRA)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col" style="margin-bottom: 20px;">
+                    <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                    <textarea id="flux_prompt" rows="3">A cinematic shot of a futuristic cyberpunk street, neon lights, rain, highly detailed, 8k, photorealistic, masterpiece</textarea>
+                    <button onclick="openLoraModal('flux')" class="btn-small dashed">+ ADD LORA</button>
+                </div>
+                <div class="glass-box">
+                    <div class="row">
+                        <div class="col"><label>Sampler</label><select id="flux_sampler"><option>Euler</option></select></div>
+                        <div class="col"><label>Schedule</label><select id="flux_scheduler"><option>Simple</option><option>Beta</option></select></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Steps</label><input type="number" id="flux_steps" value="20"></div>
+                        <div class="col"><label>CFG</label><input type="number" id="flux_cfg" value="1.0"></div>
+                        <div class="col"><label>Distilled</label><input type="number" id="flux_distilled" value="3.5"></div>
+                    </div>
+                    <div class="row" style="margin-top: 10px;">
+                        <div class="col"><label>Width</label><input type="number" id="flux_width" value="1024" step="64"></div>
+                        <div class="col"><label>Height</label><input type="number" id="flux_height" value="1024" step="64"></div>
+                    </div>
+                    <div id="resSelector" style="margin-top: 15px;">
+                        <label>Aspect Ratio</label>
+                        <div id="resGrid">
+                            <div class="mp-label">1MP</div>
+                            <div class="res-switch" onclick="setRes('flux', 1024, 1024)">1:1</div>
+                            <div class="res-switch" onclick="setRes('flux', 896, 1152)">3:4</div>
+                            <div class="res-switch" onclick="setRes('flux', 1152, 896)">4:3</div>
+                            <div class="res-switch" onclick="setRes('flux', 832, 1216)">9:16</div>
+                            <div class="res-switch" onclick="setRes('flux', 1216, 832)">16:9</div>
+                            <div class="mp-label">2MP</div>
+                            <div class="res-switch" onclick="setRes('flux', 1440, 1440)">1:1</div>
+                            <div class="res-switch" onclick="setRes('flux', 1088, 1920)">9:16</div>
+                            <div class="res-switch" onclick="setRes('flux', 1920, 1088)">16:9</div>
+                            <div class="res-switch" onclick="setRes('flux', 1280, 1536)">4:5</div>
+                            <div class="res-switch" onclick="flipRes('flux')"><i data-lucide="arrow-left-right" size="12"></i></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" style="margin-top: 15px;">
+                        <div class="col"><label>Batch Size</label><input type="number" id="flux_batch_size" value="1" min="1"></div>
+                        <div class="col"><label>Batch Count</label><input type="number" id="flux_batch_count" value="1" min="1"></div>
+                        <div class="col"><label>Seed</label><div class="row"><input type="number" id="flux_seed" value="-1"><button class="btn-icon" onclick="document.getElementById('flux_seed').value='-1'"><i data-lucide="dices" size="14"></i></button></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="unloadModel()" class="btn-small" style="width: 100%; margin-bottom: 10px; margin-top: 20px; background: rgba(244, 67, 54, 0.15); border: 1px solid rgba(244, 67, 54, 0.3); color: #f44336;">
+                <i data-lucide="trash-2" size="14" style="vertical-align: -2px; margin-right: 6px;"></i> UNLOAD MODEL (CLEAR VRAM)
+            </button>
+
+            <div class="row" style="margin-bottom: 15px;">
+                <button class="btn-secondary" onclick="addToQueue()" style="flex: 1;"><i data-lucide="list-plus"></i> QUEUE</button>
+                <button id="genBtn" onclick="generate()" style="flex: 2;">INITIALIZE</button>
+            </div>
+
+            <div class="row" style="margin-top: 15px; justify-content: space-between; align-items: center;">
+                <div class="row" style="width: auto; gap: 8px;">
+                    <input type="checkbox" id="autoDlCheck" onchange="saveAutoDlState()" style="width: 16px; height: 16px;">
+                    <label for="autoDlCheck" style="margin: 0; color: var(--text-main);">Auto-Save</label>
+                </div>
+                <button onclick="clearGenResults()" class="btn-small dashed" style="width: auto; margin: 0; padding: 6px 10px;">CLEAR VIEW</button>
+            </div>
+            
+            <div id="gallery"><div class="spinner" id="loadingSpinner"></div></div>
+            <div id="metaData" class="glass-box hidden" style="font-family: monospace; font-size: 10px; color: var(--text-muted);"></div>
+        </div>
+
+        <div id="view-que" class="hidden">
+            <div class="row" style="justify-content: space-between; margin-bottom: 15px;">
+                <label style="font-size: 14px; color: var(--accent-secondary); font-weight: 900;">BATCH QUEUE</label>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="clearQueue()" class="btn-small" style="background: #f44336;">CLEAR ALL</button>
+                    <button onclick="processQueue()" id="startQueueBtn" class="btn-small" style="background: var(--accent-gradient); color: white; border: none; box-shadow: 0 4px 10px var(--accent-glow);">START BATCH</button>
+                </div>
+            </div>
+            
+            <div id="queueProgressBox" class="glass-box hidden" style="padding: 10px; margin-bottom: 10px;">
+                <div class="row" style="justify-content: space-between;">
+                    <label style="color: var(--text-main);">Batch Progress</label>
+                    <span id="queueProgressText" style="font-family: monospace; color: var(--accent-primary); font-weight: bold;">0 / 0 Steps</span>
+                </div>
+            </div>
+
+            <div id="queueListContainer">
+                <div style="text-align:center; color:var(--text-muted); margin-top:50px;">Queue Empty</div>
+            </div>
+        </div>
+
+        <div id="view-gal" class="hidden">
+            <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+                <label style="font-size: 14px; color: var(--text-main);">HISTORY</label>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="clearDbGallery()" class="btn-small" style="background: rgba(244, 67, 54, 0.2); color: #f44336; border: 1px solid rgba(244, 67, 54, 0.3);">CLEAR ALL</button>
+                    <button id="galSelectBtn" onclick="toggleGallerySelectionMode()" class="btn-small" style="background: var(--input-bg);">SELECT</button>
+                    <button id="galDeleteBtn" onclick="deleteSelectedImages()" class="btn-small hidden" style="background: #f44336;">DELETE (0)</button>
+                </div>
+            </div>
+            <div id="savedGalleryGrid">
+                <div style="text-align:center; color:var(--text-muted); margin-top:50px;">Empty History</div>
+            </div>
+            <div class="row" style="justify-content: center; margin-top: 15px; gap: 15px;">
+                <button id="prevPageBtn" onclick="changeGalleryPage(-1)" class="btn-small" style="width: auto;">&lt; PREV</button>
+                <span id="pageIndicator" style="font-size: 12px; font-weight: bold; color: var(--text-muted); align-self: center;">Page 1</span>
+                <button id="nextPageBtn" onclick="changeGalleryPage(1)" class="btn-small" style="width: auto;">NEXT &gt;</button>
+            </div>
+        </div>
+
+        <div id="view-ana" class="hidden">
+            <label for="imageUpload">
+                <div id="uploadBox">
+                    <i data-lucide="image-plus" size="32" style="margin-bottom: 10px; color: var(--text-muted);"></i>
+                    <div style="font-weight: bold; color: var(--text-main);">TAP TO UPLOAD</div>
+                </div>
+            </label>
+            <input type="file" id="imageUpload" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+            <div class="glass-box" style="margin-top: 20px;">
+                <div class="row">
+                    <div class="col"><label>Resolution</label><div id="resOut" style="font-weight: bold;">-- x --</div></div>
+                    <div class="col"><label>Ratio</label><div id="arOut" style="font-weight: bold;">--</div></div>
+                </div>
+            </div>
+            <div id="anaGallery" class="hidden" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--glass-border);">
+                <img id="anaPreview" style="width: 100%; display: block;">
+            </div>
+            <div style="margin-top: 15px;">
+                <label>Metadata</label>
+                <div id="anaMeta" class="glass-box" style="min-height: 100px; font-family: monospace; font-size: 10px; color: var(--text-muted); word-break: break-all;">Load image...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loraModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn">×</button></div>
+            <input type="text" id="loraSearch" placeholder="Search..." onkeyup="filterLoras()">
+            <div id="loraVerticalList"></div>
+        </div>
+    </div>
+    
+    <div id="fullScreenModal" class="modal hidden">
+        <div class="lightbox-container">
+            <button class="nav-arrow left" onclick="slideImage(-1)"><i data-lucide="chevron-left"></i></button>
+            <img id="fsImage" class="lightbox-img">
+            <button class="nav-arrow right" onclick="slideImage(1)"><i data-lucide="chevron-right"></i></button>
+        </div>
+        <div class="lightbox-controls">
+            <button onclick="closeFsModal()" class="btn-small" style="background: #333;">CLOSE</button>
+            <button onclick="downloadCurrent()" class="btn-icon" style="background: var(--accent-secondary); border:none; color:white;"><i data-lucide="download"></i></button>
+            <button onclick="deleteCurrentFsImage()" class="btn-icon" style="background: #f44336; border:none; color:white;"><i data-lucide="trash-2"></i></button>
+            <button onclick="analyzeCurrentFs()" class="btn-small" style="background: var(--accent-primary);">ANALYZE</button>
+        </div>
+    </div>
+
+    <div class="dock-wrapper">
+        <div class="glass-dock">
+            <div class="dock-item active" onclick="switchTab('gen')"><i data-lucide="zap"></i><span>GEN</span></div>
+            <div class="dock-item" onclick="switchTab('que')">
+                <div style="position: relative;">
+                    <i data-lucide="layers"></i>
+                    <div id="queueBadge" class="badge hidden">0</div>
+                </div>
+                <span>QUE</span>
+            </div>
+            <div class="dock-item" onclick="switchTab('gal')"><i data-lucide="image"></i><span>GAL</span></div>
+            <div class="dock-item" onclick="switchTab('ana')"><i data-lucide="scan-line"></i><span>ANA</span></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
