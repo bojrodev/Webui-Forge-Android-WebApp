@@ -11,9 +11,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Register your custom plugin so Capacitor can find it
+        registerPlugin(ResolverServicePlugin.class);
+
         super.onCreate(savedInstanceState);
-        
-        // REMOVED: getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         
         // KEEPING: Partial WakeLock (CPU stays on when screen goes off)
         PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -26,6 +27,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        // Release the wake lock to save battery when app is fully killed
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
