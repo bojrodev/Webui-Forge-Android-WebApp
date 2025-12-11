@@ -74,7 +74,10 @@
 
             <div id="mode-xl-container">
                 <div class="col" style="margin-bottom: 20px;">
-                    <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                    <div class="row" style="justify-content:space-between; margin-bottom: 5px;">
+                         <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                         <button onclick="openLlmModal('xl')" class="btn-small" style="width: auto; padding: 4px 8px; font-size: 10px; border-color: var(--accent-primary); color: var(--accent-primary);"><i data-lucide="bot" size="10" style="margin-right:4px;"></i>MAGIC PROMPT</button>
+                    </div>
                     <textarea id="xl_prompt" rows="3">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish, masterpiece, best quality</textarea>
                     <button onclick="openLoraModal('xl')" class="btn-small dashed">+ ADD LORA</button>
                     <label><i data-lucide="shield-off" size="12"></i> Negative</label>
@@ -150,7 +153,10 @@
                 </div>
 
                 <div class="col" style="margin-bottom: 20px;">
-                    <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                    <div class="row" style="justify-content:space-between; margin-bottom: 5px;">
+                        <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                        <button onclick="openLlmModal('flux')" class="btn-small" style="width: auto; padding: 4px 8px; font-size: 10px; border-color: var(--accent-primary); color: var(--accent-primary);"><i data-lucide="bot" size="10" style="margin-right:4px;"></i>MAGIC PROMPT</button>
+                   </div>
                     <textarea id="flux_prompt" rows="3">A cinematic shot of a futuristic cyberpunk street, neon lights, rain, highly detailed, 8k, photorealistic, masterpiece</textarea>
                     <button onclick="openLoraModal('flux')" class="btn-small dashed">+ ADD LORA</button>
                 </div>
@@ -284,6 +290,58 @@
             <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn">×</button></div>
             <input type="text" id="loraSearch" placeholder="Search..." onkeyup="filterLoras()">
             <div id="loraVerticalList"></div>
+        </div>
+    </div>
+
+    <div id="llmModal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh;">
+            <div class="modal-header">
+                <h3>Magic Prompt</h3>
+                <button onclick="closeLlmModal()" class="close-btn">×</button>
+            </div>
+            
+            <div class="col" style="gap: 15px; flex: 1; overflow-y: auto;">
+                <div>
+                    <label>Idea / Natural Language</label>
+                    <textarea id="llmInput" rows="2" placeholder="A futuristic city with flying cars..." oninput="updateLlmState()"></textarea>
+                </div>
+                
+                <div>
+                    <label style="color:var(--accent-secondary);">Generated Output</label>
+                    <textarea id="llmOutput" rows="4" placeholder="AI Output will appear here..." readonly></textarea>
+                </div>
+
+                <button id="llmUseBtn" onclick="useLlmPrompt()" class="btn-small" style="width:100%; background:var(--glass-border); color:var(--text-main); border:1px solid var(--accent-primary);">USE AS PROMPT</button>
+
+                <div style="display:none;">
+                    <textarea id="llmSystemPrompt" rows="4"></textarea>
+                </div>
+
+                <div id="llmSettingsBox" class="glass-box hidden" style="padding: 10px; background: rgba(0,0,0,0.3); margin-top:10px;">
+                    <label style="color: var(--accent-primary);">LLM Configuration</label>
+                    <div class="col" style="margin-top:5px; gap:8px;">
+                        
+                        <div class="row">
+                            <input type="text" id="llmApiBase" placeholder="http://192.168.0.139:1234">
+                            <button onclick="connectToLlm()" class="btn-small" style="width: auto;">LINK</button>
+                        </div>
+
+                        <input type="password" id="llmApiKey" placeholder="API Key (Optional)">
+                        
+                        <div class="row">
+                            <select id="llmModelSelect">
+                                <option value="">Connect first...</option>
+                            </select>
+                            <button onclick="saveLlmGlobalSettings()" class="btn-icon" style="width:40px;height:40px;"><i data-lucide="save"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row" style="margin-top:auto;">
+                    <button onclick="toggleLlmSettings()" class="btn-icon"><i data-lucide="settings"></i></button>
+                    <button id="llmGenerateBtn" onclick="generateLlmPrompt()" class="btn-small" style="flex:1; background: var(--accent-gradient); color: white; height: 44px;">GENERATE PROMPT</button>
+                </div>
+            </div>
         </div>
     </div>
     
