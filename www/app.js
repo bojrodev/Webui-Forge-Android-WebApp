@@ -5,6 +5,7 @@ const Filesystem = window.Capacitor ? window.Capacitor.Plugins.Filesystem : null
 const Toast = window.Capacitor ? window.Capacitor.Plugins.Toast : null;
 const LocalNotifications = window.Capacitor ? window.Capacitor.Plugins.LocalNotifications : null;
 const App = window.Capacitor ? window.Capacitor.Plugins.App : null;
+const CapacitorHttp = window.Capacitor ? window.Capacitor.Plugins.CapacitorHttp : null; 
 
 // --- STATE ---
 let currentMode = 'xl'; 
@@ -29,7 +30,7 @@ let isSingleJobRunning = false;
 
 // Notification Throttling Control
 let notificationUpdateThrottle = 0; // Tracks last update time
-const NOTIFICATION_UPDATE_INTERVAL_MS = 5000; // Update max every 5 seconds
+const NOTIFICATION_UPDATE_INTERVAL_MS = 5000; 
 
 // Gallery Selection State
 let isSelectionMode = false;
@@ -41,6 +42,7 @@ window.onload = function() {
     loadAutoDlState();
     setupBackgroundListeners();
     createNotificationChannel(); 
+    loadLlmSettings(); // Load magic prompt settings
 }
 
 // --- BACKGROUND / NOTIFICATION LOGIC ---
@@ -50,7 +52,7 @@ async function createNotificationChannel() {
         await LocalNotifications.createChannel({
             id: 'batch_channel',
             name: 'Generation Status',
-            importance: 3, // Default importance
+            importance: 3, 
             visibility: 1,
             vibration: false 
         });
@@ -68,7 +70,6 @@ function setupBackgroundListeners() {
             let totalSteps = isQueueRunning ? totalBatchSteps : 
                              (jobQueue.length > 0 ? jobQueue[0].payload.steps : 0);
             
-            // Force an immediate update right as the app leaves the foreground
             await updateBatchNotification(`Generation running in background`, true, `Step ${currentSteps} / ${totalSteps}`);
         }
     });
@@ -85,12 +86,10 @@ function setupBackgroundListeners() {
 async function updateBatchNotification(title, force = false, body = "") {
     if (!LocalNotifications) return;
     
-    // Check if the app is backgrounded OR if it's a forced/final message
     if (!document.hidden && !force && title !== "Batch Complete!") return; 
 
     const now = Date.now();
     
-    // Throttle the periodic step updates unless forced
     if (!force && title !== "Batch Complete!") {
         if (now < notificationUpdateThrottle + NOTIFICATION_UPDATE_INTERVAL_MS) {
             return;
@@ -106,7 +105,7 @@ async function updateBatchNotification(title, force = false, body = "") {
                 id: 1001, 
                 channelId: 'batch_channel',
                 ongoing: true, 
-                onlyAlertOnce: true, // Prevents persistent pop-up/sound
+                onlyAlertOnce: true, 
                 autoCancel: false,
             }]
         });
@@ -410,6 +409,219 @@ window.filterLoras = () => {
             list.appendChild(d);
         }
     });
+}
+
+// --- MAGIC PROMPT LLM INTEGRATION (DUAL MEMORY) ---
+let activeLlmMode = 'xl';
+
+// Stores input/output text for each mode so they don't overwrite each other
+let llmState = {
+    xl: { input: "", output: "" },
+    flux: { input: "", output: "" }
+};
+
+let llmSettings = {
+    baseUrl: 'http://localhost:11434',
+    key: '',
+    model: '',
+    system_xl: 'You are a creative prompt engineer for Stable Diffusion SDXL. Convert the user idea into a vivid, highly detailed, comma-separated art prompt. Include keywords for lighting, style, and quality. Do not explain.',
+    system_flux: 'You are a creative prompt engineer for Flux.1. Convert the user idea into a natural language description. Focus on physics, lighting, texture and composition. Write in full sentences, not comma-separated tags.'
+};
+
+window.openLlmModal = (mode) => {
+    activeLlmMode = mode;
+    document.getElementById('llmModal').classList.remove('hidden');
+    
+    // Restore text from memory for this specific mode
+    const inputEl = document.getElementById('llmInput');
+    const outputEl = document.getElementById('llmOutput');
+    
+    inputEl.value = llmState[mode].input;
+    outputEl.value = llmState[mode].output;
+    
+    // Switch System Prompt logic (hidden but functional)
+    const savedSys = activeLlmMode === 'xl' ? llmSettings.system_xl : llmSettings.system_flux;
+    document.getElementById('llmSystemPrompt').value = savedSys || "";
+
+    // Update Button Text Logic
+    updateLlmButtonState();
+    
+    // Focus if empty
+    if(!inputEl.value) inputEl.focus();
+}
+
+window.closeLlmModal = () => document.getElementById('llmModal').classList.add('hidden');
+window.toggleLlmSettings = () => document.getElementById('llmSettingsBox').classList.toggle('hidden');
+
+// Called when user types to save state and update button
+window.updateLlmState = function() {
+    const val = document.getElementById('llmInput').value;
+    llmState[activeLlmMode].input = val;
+}
+
+function updateLlmButtonState() {
+    const hasOutput = llmState[activeLlmMode].output.trim().length > 0;
+    const btn = document.getElementById('llmGenerateBtn');
+    btn.innerText = hasOutput ? "ITERATE" : "GENERATE PROMPT";
+}
+
+function loadLlmSettings() {
+    const s = localStorage.getItem('bojroLlmConfig');
+    if(s) {
+        const loaded = JSON.parse(s);
+        llmSettings = { ...llmSettings, ...loaded };
+        document.getElementById('llmApiBase').value = llmSettings.baseUrl || '';
+        document.getElementById('llmApiKey').value = llmSettings.key || '';
+        
+        if(llmSettings.model) {
+            const sel = document.getElementById('llmModelSelect');
+            sel.innerHTML = `<option value="${llmSettings.model}">${llmSettings.model}</option>`;
+            sel.value = llmSettings.model;
+        }
+    }
+}
+
+window.saveLlmGlobalSettings = function() {
+    llmSettings.baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, ""); 
+    llmSettings.key = document.getElementById('llmApiKey').value;
+    llmSettings.model = document.getElementById('llmModelSelect').value;
+    
+    // Also save hidden system prompt just in case user edited DOM or we add edit back later
+    const sysVal = document.getElementById('llmSystemPrompt').value;
+    if(activeLlmMode === 'xl') llmSettings.system_xl = sysVal;
+    else llmSettings.system_flux = sysVal;
+
+    localStorage.setItem('bojroLlmConfig', JSON.stringify(llmSettings));
+    
+    if(Toast) Toast.show({ text: 'Settings & Model Saved', duration: 'short' });
+}
+
+window.connectToLlm = async function() {
+    if (!CapacitorHttp) return alert("Native HTTP Plugin not loaded! Rebuild App.");
+
+    const baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, "");
+    const key = document.getElementById('llmApiKey').value;
+    
+    if(!baseUrl) return alert("Enter Server URL first");
+    
+    const btn = event.target;
+    const originalText = btn.innerText;
+    btn.innerText = "...";
+    btn.disabled = true;
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if(key) headers['Authorization'] = `Bearer ${key}`;
+
+        const response = await CapacitorHttp.get({
+            url: `${baseUrl}/v1/models`,
+            headers: headers
+        });
+        
+        const data = response.data;
+        if(response.status >= 400) throw new Error(`HTTP ${response.status}`);
+
+        const select = document.getElementById('llmModelSelect');
+        select.innerHTML = "";
+        
+        if(data.data && Array.isArray(data.data)) {
+            data.data.forEach(m => {
+                select.appendChild(new Option(m.id, m.id));
+            });
+            if(Toast) Toast.show({ text: `Found ${data.data.length} models`, duration: 'short' });
+        } else {
+            throw new Error("Invalid model format");
+        }
+        
+        document.getElementById('llmApiBase').value = baseUrl; 
+        // Auto-save connection details
+        saveLlmGlobalSettings();
+        
+    } catch(e) {
+        alert("Link Error: " + (e.message || JSON.stringify(e)));
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
+
+window.generateLlmPrompt = async function() {
+    if (!CapacitorHttp) return alert("Native HTTP Plugin not loaded!");
+
+    const btn = document.getElementById('llmGenerateBtn');
+    const inputVal = document.getElementById('llmInput').value;
+    const baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, "");
+    const model = document.getElementById('llmModelSelect').value;
+    
+    if(!inputVal) return alert("Please enter an idea!");
+    if(!baseUrl) return alert("Please connect to server first!");
+    
+    btn.disabled = true;
+    btn.innerText = "GENERATING...";
+    
+    // Get Hidden System Prompt
+    const sysPrompt = document.getElementById('llmSystemPrompt').value;
+    const promptTemplate = `1.Prompt(natural language): ${inputVal} Model: ${activeLlmMode === 'xl' ? 'Sdxl' : 'Flux'}`;
+    
+    try {
+        const payload = {
+            model: model || "default", 
+            messages: [
+                { role: "system", content: sysPrompt },
+                { role: "user", content: promptTemplate }
+            ],
+            stream: false
+        };
+
+        const headers = { 'Content-Type': 'application/json' };
+        if(llmSettings.key) headers['Authorization'] = `Bearer ${llmSettings.key}`;
+
+        const response = await CapacitorHttp.post({
+            url: `${baseUrl}/v1/chat/completions`,
+            headers: headers,
+            data: payload 
+        });
+
+        if(response.status >= 400) throw new Error(`HTTP ${response.status}`);
+        
+        const data = response.data;
+        let result = "";
+        
+        if(data.choices && data.choices[0] && data.choices[0].message) {
+            result = data.choices[0].message.content;
+        } else if (data.response) { 
+            result = data.response;
+        } else {
+            throw new Error("Unknown API response");
+        }
+
+        // UPDATE OUTPUT BOX & STATE
+        document.getElementById('llmOutput').value = result;
+        llmState[activeLlmMode].output = result;
+        
+        // Change button to ITERATE
+        updateLlmButtonState();
+
+        if(Toast) Toast.show({ text: 'Prompt Generated!', duration: 'short' });
+
+    } catch(e) {
+        alert("Generation failed: " + (e.message || JSON.stringify(e)));
+    } finally {
+        btn.disabled = false;
+        // Don't reset text here, updateLlmButtonState handles it
+        updateLlmButtonState();
+    }
+}
+
+window.useLlmPrompt = function() {
+    const result = document.getElementById('llmOutput').value;
+    if(!result) return alert("Generate a prompt first!");
+
+    const targetId = activeLlmMode === 'xl' ? 'xl_prompt' : 'flux_prompt';
+    document.getElementById(targetId).value = result;
+    
+    closeLlmModal();
+    if(Toast) Toast.show({ text: 'Applied to main prompt!', duration: 'short' });
 }
 
 // --- CORE JOB BUILDER ---
