@@ -9,21 +9,20 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "ResolverService")
 public class ResolverServicePlugin extends Plugin {
 
-    // This method is called from JavaScript (updateNativeServiceStatus)
     @PluginMethod()
     public void updateProgress(PluginCall call) {
         String title = call.getString("title", "Processing");
+        String body = call.getString("body", "Preparing..."); // Get body text
         int progress = call.getInt("progress", 0);
 
-        // Start the service if it's a new job, or update if running
-        ResolverForegroundService.startOrUpdateService(getContext(), title, progress);
+        // Pass 'body' to the service
+        ResolverForegroundService.startOrUpdateService(getContext(), title, body, progress);
         
         call.resolve();
     }
     
     @PluginMethod()
     public void stop(PluginCall call) {
-        // Stop the service (called when generation completes)
         ResolverForegroundService.stopService(getContext());
         call.resolve();
     }

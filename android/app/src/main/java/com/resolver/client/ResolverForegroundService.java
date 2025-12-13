@@ -17,21 +17,21 @@ public class ResolverForegroundService extends Service {
     private static final String CHANNEL_ID = "RESOLVER_FG_CHANNEL";
     private static final int NOTIFICATION_ID = 1002;
     
-    // Actions for Intents
+    // Actions
     public static final String ACTION_START_FOREGROUND_SERVICE = "ACTION_START_FOREGROUND_SERVICE";
     public static final String ACTION_STOP_FOREGROUND_SERVICE = "ACTION_STOP_FOREGROUND_SERVICE";
     public static final String ACTION_UPDATE_PROGRESS = "ACTION_UPDATE_PROGRESS";
     
-    // Data Keys
+    // Extras
     public static final String EXTRA_TITLE = "EXTRA_TITLE";
+    public static final String EXTRA_BODY = "EXTRA_BODY"; // Added Body Extra
     public static final String EXTRA_PROGRESS = "EXTRA_PROGRESS";
     
     // --- Public Service Control Methods ---
     
-    public static void startOrUpdateService(Context context, String title, int progress) {
+    public static void startOrUpdateService(Context context, String title, String body, int progress) {
         Intent intent = new Intent(context, ResolverForegroundService.class);
         
-        // Determine action: START if 0, UPDATE otherwise
         if (progress == 0) {
             intent.setAction(ACTION_START_FOREGROUND_SERVICE);
         } else {
@@ -39,9 +39,9 @@ public class ResolverForegroundService extends Service {
         }
         
         intent.putExtra(EXTRA_TITLE, title);
+        intent.putExtra(EXTRA_BODY, body); // Pass body
         intent.putExtra(EXTRA_PROGRESS, progress);
         
-        // Start the service for immediate execution
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent);
         } else {
@@ -63,14 +63,18 @@ public class ResolverForegroundService extends Service {
             String action = intent.getAction();
             
             if (action != null) {
+                String title = intent.getStringExtra(EXTRA_TITLE);
+                String body = intent.getStringExtra(EXTRA_BODY);
+                if (title == null) title = "Processing";
+                if (body == null) body = "Initializing...";
+
                 switch (action) {
                     case ACTION_START_FOREGROUND_SERVICE:
-                        startForegroundServiceCompat("Generation Started", 0);
+                        startForegroundServiceCompat(title, body, 0);
                         break;
                     case ACTION_UPDATE_PROGRESS:
-                        String title = intent.getStringExtra(EXTRA_TITLE);
                         int progress = intent.getIntExtra(EXTRA_PROGRESS, 0);
-                        updateNotification(title, progress);
+                        updateNotification(title, body, progress);
                         break;
                     case ACTION_STOP_FOREGROUND_SERVICE:
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -103,12 +107,13 @@ public class ResolverForegroundService extends Service {
         }
     }
 
-    private Notification buildNotification(String title, int progress) {
+    private Notification buildNotification(String title, String body, int progress) {
         createNotificationChannel();
         
+        // Use the passed 'body' text instead of hardcoded string
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
-                .setContentText("Step count in progress...") 
+                .setContentText(body) 
                 .setSmallIcon(R.mipmap.ic_launcher) 
                 .setProgress(100, progress, false) 
                 .setOnlyAlertOnce(true) 
@@ -117,10 +122,9 @@ public class ResolverForegroundService extends Service {
                 .build();
     }
     
-    private void startForegroundServiceCompat(String title, int progress) {
-        Notification notification = buildNotification(title, progress);
+    private void startForegroundServiceCompat(String title, String body, int progress) {
+        Notification notification = buildNotification(title, body, progress);
         
-        // Android 14 (SDK 34) requires declaring the service type here
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
@@ -128,8 +132,8 @@ public class ResolverForegroundService extends Service {
         }
     }
     
-    private void updateNotification(String title, int progress) {
-        Notification notification = buildNotification(title, progress);
+    private void updateNotification(String title, String body, int progress) {
+        Notification notification = buildNotification(title, body, progress);
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, notification);

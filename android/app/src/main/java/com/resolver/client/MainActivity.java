@@ -11,12 +11,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Register your custom plugin so Capacitor can find it
         registerPlugin(ResolverServicePlugin.class);
-
         super.onCreate(savedInstanceState);
         
-        // KEEPING: Partial WakeLock (CPU stays on when screen goes off)
+        // Acquire Partial WakeLock (CPU Keep Alive)
         PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         if (powerManager != null) {
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Resolver:BatchWakeLock");
@@ -25,9 +23,20 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        // CRITICAL FIX:
+        // When app goes to background, Android pauses WebView timers (JS stops).
+        // Since we have a Foreground Service running, we can force timers to resume
+        // so 'setInterval' in app.js keeps firing.
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            this.bridge.getWebView().resumeTimers();
+        }
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
-        // Release the wake lock to save battery when app is fully killed
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }

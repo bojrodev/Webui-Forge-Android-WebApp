@@ -6,7 +6,7 @@ const Toast = window.Capacitor ? window.Capacitor.Plugins.Toast : null;
 const LocalNotifications = window.Capacitor ? window.Capacitor.Plugins.LocalNotifications : null;
 const App = window.Capacitor ? window.Capacitor.Plugins.App : null;
 const CapacitorHttp = window.Capacitor ? window.Capacitor.Plugins.CapacitorHttp : null;
-// FIX: Link the Custom Native Service Plugin
+// NATIVE SERVICE LINK
 const ResolverService = window.Capacitor ? window.Capacitor.Plugins.ResolverService : null;
 
 // --- STATE ---
@@ -30,13 +30,16 @@ let totalBatchSteps = 0;
 let currentBatchProgress = 0;
 let isSingleJobRunning = false; 
 
-// Notification Throttling Control
-let notificationUpdateThrottle = 0; // Tracks last update time
-const NOTIFICATION_UPDATE_INTERVAL_MS = 1000; // Faster updates for native progress bar
+// Notification Throttling
+let notificationUpdateThrottle = 0; 
+const NOTIFICATION_UPDATE_INTERVAL_MS = 1000; 
 
 // Gallery Selection State
 let isSelectionMode = false;
 let selectedImageIds = new Set();
+
+// Analyzer State
+let currentAnalyzedPrompts = null;
 
 // --- INITIALIZATION ---
 window.onload = function() {
@@ -44,12 +47,16 @@ window.onload = function() {
         loadHostIp();
         loadAutoDlState();
         setupBackgroundListeners();
-        // Only create local channel if we might use fallback (not critical for native)
         createNotificationChannel(); 
-        loadLlmSettings(); // Load magic prompt settings
+        loadLlmSettings(); 
+        
+        // AUTO-CONNECT FEATURE
+        if (document.getElementById('hostIp').value) {
+            console.log("Auto-connecting...");
+            window.connect(true); // Call connect in silent mode
+        }
     } catch (e) {
         console.error("Initialization Error:", e);
-        alert("Startup Warning: " + e.message);
     }
 }
 
@@ -57,7 +64,6 @@ window.onload = function() {
 async function createNotificationChannel() {
     if (!LocalNotifications) return;
     try {
-        // Fallback channel for web/non-native (Importance 2 = LOW/SILENT)
         await LocalNotifications.createChannel({
             id: 'batch_channel',
             name: 'Generation Status',
@@ -69,41 +75,40 @@ async function createNotificationChannel() {
 }
 
 function setupBackgroundListeners() {
-    if (!App || !LocalNotifications) return;
+    if (!App) return;
 
     // 1. When User Presses Home (Background)
     App.addListener('pause', async () => {
-        if (isQueueRunning || isSingleJobRunning) {
-            let currentSteps = isQueueRunning ? currentBatchProgress : 
-                               (jobQueue.length > 0 ? 0 : 0);
-            let totalSteps = isQueueRunning ? totalBatchSteps : 
-                             (jobQueue.length > 0 ? jobQueue[0].payload.steps : 0);
-            
-            await updateBatchNotification(`Generation running in background`, true, `Step ${currentSteps} / ${totalSteps}`);
-        }
+        // App backgrounded
     });
 
     // 2. When User Opens App (Foreground)
     App.addListener('resume', async () => {
-        // Optional: Clear local notifications when returning to app
-        try {
-            const pending = await LocalNotifications.getPending();
-            if (pending.notifications.length > 0) {
-                await LocalNotifications.cancel(pending);
-            }
-        } catch (e) { console.error("Resume Error", e); }
+        // Clear local notifications
+        if (LocalNotifications) {
+            try {
+                const pending = await LocalNotifications.getPending();
+                if (pending.notifications.length > 0) {
+                    await LocalNotifications.cancel(pending);
+                }
+            } catch (e) { console.error("Resume Error", e); }
+        }
+        
+        // Auto-reconnect check if dropped
+        if(!allLoras.length && document.getElementById('hostIp').value) {
+             window.connect(true);
+        }
     });
 }
 
-// FIX: Updated Notification Logic for Persistent Progress Bar
+// --- CORE NOTIFICATION FIX ---
 async function updateBatchNotification(title, force = false, body = "") {
     
-    // 1. Calculate Progress Percentage for Native Bar
+    // 1. Calculate Progress Percentage
     let progressVal = 0;
     try {
         if (body && body.includes(" / ")) {
             const parts = body.split(" / ");
-            // Extract numbers from strings like "Step 5"
             const current = parseInt(parts[0].replace(/\D/g, '')) || 0;
             const total = parseInt(parts[1].replace(/\D/g, '')) || 1;
             if (total > 0) {
@@ -112,21 +117,21 @@ async function updateBatchNotification(title, force = false, body = "") {
         }
     } catch (e) { progressVal = 0; }
 
-    // 2. PRIMARY: Call Native Service (Keeps App Alive & Single Persistent Notification)
+    // 2. PRIMARY: Native Service
     if (ResolverService) {
         try {
             await ResolverService.updateProgress({
                 title: title,
+                body: body, // Sends "Step 5/20" to Android Notification
                 progress: progressVal
             });
-            // CRITICAL: Return here to prevent double notification from LocalNotifications
             return; 
         } catch (e) {
             console.error("Native Service Error:", e);
         }
     }
 
-    // 3. FALLBACK: Local Notification (Only if Native Service fails or missing)
+    // 3. FALLBACK: Local Notification
     if (!document.hidden && !force && title !== "Batch Complete!") return; 
 
     const now = Date.now();
@@ -148,12 +153,10 @@ async function updateBatchNotification(title, force = false, body = "") {
                     ongoing: true, 
                     onlyAlertOnce: true, 
                     autoCancel: false,
-                    smallIcon: "ic_launcher" // Ensure icon is set
+                    smallIcon: "ic_launcher" 
                 }]
             });
-        } catch(e) {
-            console.error("Notif Schedule Error:", e);
-        }
+        } catch(e) {}
     }
 }
 
@@ -297,13 +300,17 @@ window.clearDbGallery = function() {
     }
 }
 
-// --- NAV ---
+// --- NAV (FIXED) ---
 window.switchTab = function(view) {
-    document.querySelectorAll('.dock-item').forEach(t => t.classList.remove('active'));
+    // Hide all views
     document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+    // Show selected view
     document.getElementById('view-' + view).classList.remove('hidden');
     
+    // Update active dock item
     const items = document.querySelectorAll('.dock-item');
+    items.forEach(item => item.classList.remove('active'));
+    
     if(view === 'gen') items[0].classList.add('active');
     if(view === 'que') items[1].classList.add('active');
     if(view === 'gal') { items[2].classList.add('active'); loadGallery(); }
@@ -312,13 +319,14 @@ window.switchTab = function(view) {
 
 // --- CONNECT ---
 function loadHostIp() { const ip = localStorage.getItem('bojroHostIp'); if(ip) document.getElementById('hostIp').value = ip; }
-window.connect = async function() {
+
+window.connect = async function(silent = false) {
     HOST = document.getElementById('hostIp').value.replace(/\/$/, "");
     const dot = document.getElementById('statusDot');
-    dot.style.background = "yellow";
+    if(!silent) dot.style.background = "yellow";
+    
     try {
-        // Setup Notifications on User Action
-        if (LocalNotifications) {
+        if (LocalNotifications && !silent) {
             const perm = await LocalNotifications.requestPermissions();
             if (perm.display === 'granted') {
                 await createNotificationChannel();
@@ -327,13 +335,17 @@ window.connect = async function() {
 
         const res = await fetch(`${HOST}/sdapi/v1/sd-models`, { headers: getHeaders() });
         if(!res.ok) throw new Error("Status " + res.status);
+        
         dot.style.background = "#00e676"; dot.classList.add('on');
         localStorage.setItem('bojroHostIp', HOST);
         document.getElementById('genBtn').disabled = false;
-        await fetchModels(); await fetchSamplers(); await fetchLoras(); await fetchVaes(); 
-        alert("CONNECTED");
+        
+        await Promise.all([fetchModels(), fetchSamplers(), fetchLoras(), fetchVaes()]);
+        
+        if(!silent) alert("CONNECTED");
     } catch(e) {
-        dot.style.background = "#f44336"; alert("Failed: " + e.message);
+        dot.style.background = "#f44336"; 
+        if(!silent) alert("Failed: " + e.message);
     }
 }
 
@@ -454,22 +466,16 @@ window.filterLoras = () => {
     });
 }
 
-// --- MAGIC PROMPT LLM INTEGRATION (DUAL MEMORY) ---
+// --- MAGIC PROMPT LLM INTEGRATION ---
 let activeLlmMode = 'xl';
-
-// Stores input/output text for each mode so they don't overwrite each other
 let llmState = {
     xl: { input: "", output: "" },
     flux: { input: "", output: "" }
 };
-
-// --- SYSTEM PROMPTS (CONDITIONAL NSFW & SFW) ---
 let llmSettings = {
     baseUrl: 'http://localhost:11434',
     key: '',
     model: '',
-    
-    // SDXL: CONDITIONAL SAFETY LOGIC + RAW TAGS
     system_xl: `You are an SDXL Prompt Generator.
 OBJECTIVE: Convert user concepts into a dense, highly detailed string of comma-separated tags.
 CRITICAL SAFETY LOGIC:
@@ -486,8 +492,6 @@ GENERAL RULES:
 - PREFIX: Always start with "masterpiece, best quality" for sfw, for nsfw: "masterpiece, best quality, score_9, score_8".
 - CONTENT ORDER: Quality -> Subject -> Features -> Outfit/Nudity -> Action -> Background -> Lighting -> Tech.
 - NEGATIVE: Do NOT generate negative prompts.`,
-
-    // FLUX: PURE DESCRIPTION NO LABELS
     system_flux: `You are a FLUX Image Prompter.
 OBJECTIVE: Convert user concepts into a detailed, natural language description.
 RULES:
@@ -501,29 +505,19 @@ RULES:
 window.openLlmModal = (mode) => {
     activeLlmMode = mode;
     document.getElementById('llmModal').classList.remove('hidden');
-    
-    // Restore text from memory for this specific mode
     const inputEl = document.getElementById('llmInput');
     const outputEl = document.getElementById('llmOutput');
-    
     inputEl.value = llmState[mode].input;
     outputEl.value = llmState[mode].output;
-    
-    // Switch System Prompt logic (hidden but functional)
     const savedSys = activeLlmMode === 'xl' ? llmSettings.system_xl : llmSettings.system_flux;
     document.getElementById('llmSystemPrompt').value = savedSys || "";
-
-    // Update Button Text Logic
     updateLlmButtonState();
-    
-    // Focus if empty
     if(!inputEl.value) inputEl.focus();
 }
 
 window.closeLlmModal = () => document.getElementById('llmModal').classList.add('hidden');
 window.toggleLlmSettings = () => document.getElementById('llmSettingsBox').classList.toggle('hidden');
 
-// Called when user types to save state and update button
 window.updateLlmState = function() {
     const val = document.getElementById('llmInput').value;
     llmState[activeLlmMode].input = val;
@@ -544,10 +538,8 @@ function loadLlmSettings() {
         if(loaded.model) llmSettings.model = loaded.model;
         if(loaded.system_xl) llmSettings.system_xl = loaded.system_xl;
         if(loaded.system_flux) llmSettings.system_flux = loaded.system_flux;
-        
         document.getElementById('llmApiBase').value = llmSettings.baseUrl || '';
         document.getElementById('llmApiKey').value = llmSettings.key || '';
-        
         if(llmSettings.model) {
             const sel = document.getElementById('llmModelSelect');
             sel.innerHTML = `<option value="${llmSettings.model}">${llmSettings.model}</option>`;
@@ -560,23 +552,17 @@ window.saveLlmGlobalSettings = function() {
     llmSettings.baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, ""); 
     llmSettings.key = document.getElementById('llmApiKey').value;
     llmSettings.model = document.getElementById('llmModelSelect').value;
-    
-    // Also save hidden system prompt
     const sysVal = document.getElementById('llmSystemPrompt').value;
     if(activeLlmMode === 'xl') llmSettings.system_xl = sysVal;
     else llmSettings.system_flux = sysVal;
-
     localStorage.setItem('bojroLlmConfig', JSON.stringify(llmSettings));
-    
     if(Toast) Toast.show({ text: 'Settings & Model Saved', duration: 'short' });
 }
 
 window.connectToLlm = async function() {
     if (!CapacitorHttp) return alert("Native HTTP Plugin not loaded! Rebuild App.");
-
     const baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, "");
     const key = document.getElementById('llmApiKey').value;
-    
     if(!baseUrl) return alert("Enter Server URL first");
     
     const btn = event.target;
@@ -587,114 +573,54 @@ window.connectToLlm = async function() {
     try {
         const headers = { 'Content-Type': 'application/json' };
         if(key) headers['Authorization'] = `Bearer ${key}`;
-
-        const response = await CapacitorHttp.get({
-            url: `${baseUrl}/v1/models`,
-            headers: headers
-        });
-        
+        const response = await CapacitorHttp.get({ url: `${baseUrl}/v1/models`, headers: headers });
         const data = response.data;
         if(response.status >= 400) throw new Error(`HTTP ${response.status}`);
-
         const select = document.getElementById('llmModelSelect');
         select.innerHTML = "";
-        
         if(data.data && Array.isArray(data.data)) {
-            data.data.forEach(m => {
-                select.appendChild(new Option(m.id, m.id));
-            });
+            data.data.forEach(m => { select.appendChild(new Option(m.id, m.id)); });
             if(Toast) Toast.show({ text: `Found ${data.data.length} models`, duration: 'short' });
-        } else {
-            throw new Error("Invalid model format");
-        }
-        
+        } else { throw new Error("Invalid model format"); }
         document.getElementById('llmApiBase').value = baseUrl; 
         saveLlmGlobalSettings();
-        
-    } catch(e) {
-        alert("Link Error: " + (e.message || JSON.stringify(e)));
-    } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
-    }
+    } catch(e) { alert("Link Error: " + (e.message || JSON.stringify(e))); } finally { btn.innerText = originalText; btn.disabled = false; }
 }
 
 window.generateLlmPrompt = async function() {
     if (!CapacitorHttp) return alert("Native HTTP Plugin not loaded!");
-
     const btn = document.getElementById('llmGenerateBtn');
     const inputVal = document.getElementById('llmInput').value;
     const baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, "");
     const model = document.getElementById('llmModelSelect').value;
-    
     if(!inputVal) return alert("Please enter an idea!");
     if(!baseUrl) return alert("Please connect to server first!");
     
-    btn.disabled = true;
-    btn.innerText = "GENERATING...";
-    
-    // Get Hidden System Prompt
+    btn.disabled = true; btn.innerText = "GENERATING...";
     const sysPrompt = document.getElementById('llmSystemPrompt').value;
     const promptTemplate = `1.Prompt(natural language): ${inputVal} Model: ${activeLlmMode === 'xl' ? 'Sdxl' : 'Flux'}`;
     
     try {
-        const payload = {
-            model: model || "default", 
-            messages: [
-                { role: "system", content: sysPrompt },
-                { role: "user", content: promptTemplate }
-            ],
-            stream: false
-        };
-
+        const payload = { model: model || "default", messages: [{ role: "system", content: sysPrompt }, { role: "user", content: promptTemplate }], stream: false };
         const headers = { 'Content-Type': 'application/json' };
         if(llmSettings.key) headers['Authorization'] = `Bearer ${llmSettings.key}`;
-
-        const response = await CapacitorHttp.post({
-            url: `${baseUrl}/v1/chat/completions`,
-            headers: headers,
-            data: payload 
-        });
-
+        const response = await CapacitorHttp.post({ url: `${baseUrl}/v1/chat/completions`, headers: headers, data: payload });
         if(response.status >= 400) throw new Error(`HTTP ${response.status}`);
-        
         const data = response.data;
         let result = "";
-        
-        if(data.choices && data.choices[0] && data.choices[0].message) {
-            result = data.choices[0].message.content;
-        } else if (data.response) { 
-            result = data.response;
-        } else {
-            throw new Error("Unknown API response");
-        }
-
-        // UPDATE OUTPUT BOX & STATE
+        if(data.choices && data.choices[0] && data.choices[0].message) { result = data.choices[0].message.content; } else if (data.response) { result = data.response; }
         document.getElementById('llmOutput').value = result;
         llmState[activeLlmMode].output = result;
-        
-        // Change button to ITERATE
         updateLlmButtonState();
-
         if(Toast) Toast.show({ text: 'Prompt Generated!', duration: 'short' });
-
-    } catch(e) {
-        alert("Generation failed: " + (e.message || JSON.stringify(e)));
-    } finally {
-        btn.disabled = false;
-        // Don't reset text here, updateLlmButtonState handles it
-        updateLlmButtonState();
-    }
+    } catch(e) { alert("Generation failed: " + (e.message || JSON.stringify(e))); } finally { btn.disabled = false; updateLlmButtonState(); }
 }
 
-// === NEW: USE & CLOSE (SIMPLE COPY) ===
 window.useLlmPrompt = function() {
     const result = document.getElementById('llmOutput').value;
     if(!result) return alert("Generate a prompt first!");
-
     const targetId = activeLlmMode === 'xl' ? 'xl_prompt' : 'flux_prompt';
     document.getElementById(targetId).value = result;
-    
     closeLlmModal();
     if(Toast) Toast.show({ text: 'Applied to main prompt!', duration: 'short' });
 }
@@ -789,8 +715,7 @@ window.processQueue = async function() {
     btn.innerText = "RUNNING...";
     btn.disabled = true;
 
-    // Trigger notification if app is already backgrounded when starting
-    if(document.hidden) updateBatchNotification("Starting batch job...", true, `${currentBatchProgress} / ${totalBatchSteps} steps`);
+    if(document.hidden) updateBatchNotification("Starting batch job...", true, `0 / ${totalBatchSteps} steps`);
 
     while(jobQueue.length > 0) {
         const job = jobQueue[0]; renderQueue(); 
@@ -799,7 +724,7 @@ window.processQueue = async function() {
             jobQueue.shift(); 
         } catch(e) { 
             console.error(e); 
-            updateBatchNotification("Batch Paused: Error occurred", true);
+            updateBatchNotification("Batch Paused", true, "Error occurred");
             alert("Batch paused: " + e.message); 
             break; 
         }
@@ -809,14 +734,16 @@ window.processQueue = async function() {
     btn.innerText = oldText; btn.disabled = false;
     document.getElementById('queueProgressBox').classList.add('hidden');
     
-    // Stop Native Service
-    if (ResolverService) {
-        try { await ResolverService.stop(); } catch(e){}
-    }
-
-    // Final notification
-    updateBatchNotification("Batch Complete!", true, "All images generated.");
-    // Clear notification if app comes to foreground later
+    // UPDATED: Post "Generation Complete" notification before stopping service
+    await updateBatchNotification("Batch Complete!", true, "All images generated.");
+    
+    // Slight delay to ensure notification is seen before service kill
+    setTimeout(async () => {
+        if (ResolverService) {
+            try { await ResolverService.stop(); } catch(e){}
+        }
+    }, 2000); 
+    
     if(jobQueue.length === 0) alert("Batch Complete!");
 }
 
@@ -827,18 +754,17 @@ window.generate = async function() {
     await runJob(job, false);
     isSingleJobRunning = false;
     
-    // Stop Native Service
-    if (ResolverService) {
-        try { await ResolverService.stop(); } catch(e){}
-    }
+    await updateBatchNotification("Generation Complete!", true, "Image Ready");
 
-    updateBatchNotification("Generation Complete!", true, "1 image generated.");
+    setTimeout(async () => {
+        if (ResolverService) {
+            try { await ResolverService.stop(); } catch(e){}
+        }
+    }, 2000);
 }
 
 window.clearGenResults = function() {
-    // UPDATED: Simply clear the inner HTML, spinner is external now
-    const gallery = document.getElementById('gallery');
-    gallery.innerHTML = '';
+    document.getElementById('gallery').innerHTML = '';
 }
 
 // --- EXECUTION ENGINE ---
@@ -863,6 +789,9 @@ async function runJob(job, isBatch = false) {
         if (!isReady) throw new Error("Timeout: Server failed to load model.");
 
         btn.innerText = "PROCESSING...";
+        
+        await updateBatchNotification("Starting Generation", true, "Initializing...");
+
         const jobTotalSteps = (job.payload.n_iter || 1) * job.payload.steps;
 
         const progressInterval = setInterval(async () => {
@@ -875,17 +804,14 @@ async function runJob(job, isBatch = false) {
                     const jobStep = (currentJobIndex * job.payload.steps) + currentStepInBatch;
                     btn.innerText = `Step ${jobStep}/${jobTotalSteps}`;
                     
+                    const msg = `Step ${jobStep} / ${jobTotalSteps}`;
+                    
                     if(isBatch) {
                         const actualTotal = currentBatchProgress + jobStep;
-                        const msg = `Step ${actualTotal} / ${totalBatchSteps}`;
-                        document.getElementById('queueProgressText').innerText = msg;
-                        
-                        // Update Notification for Batch (using throttle)
-                        updateBatchNotification("Batch running in background", false, msg);
+                        document.getElementById('queueProgressText').innerText = `Step ${actualTotal} / ${totalBatchSteps}`;
+                        updateBatchNotification("Batch Running", false, `Step ${actualTotal} / ${totalBatchSteps}`);
                     } else {
-                         // Update Notification for Single Job (using throttle)
-                        const msg = `Step ${jobStep} / ${jobTotalSteps}`;
-                        updateBatchNotification("Generation running in background", false, msg);
+                        updateBatchNotification("Generating...", false, msg);
                     }
                 }
             } catch(e) {}
@@ -902,23 +828,19 @@ async function runJob(job, isBatch = false) {
             for (let i = 0; i < data.images.length; i++) {
                 const b64 = data.images[i];
                 const finalB64 = "data:image/png;base64," + b64;
-                
                 const newId = await saveImageToDB(finalB64);
                 
                 const img = document.createElement('img');
                 img.src = finalB64; 
                 img.className = 'gen-result'; 
                 img.loading = "lazy";
-                
                 img.onclick = () => window.openFullscreen([finalB64], 0, img, newId);
                 
                 const gal = document.getElementById('gallery');
                 if(gal.firstChild) gal.insertBefore(img, gal.firstChild); else gal.appendChild(img);
 
                 const autoDl = document.getElementById('autoDlCheck');
-                if(autoDl && autoDl.checked) {
-                    saveToMobileGallery(finalB64);
-                }
+                if(autoDl && autoDl.checked) saveToMobileGallery(finalB64);
             }
         }
     } catch(e) { throw e; } finally {
@@ -934,10 +856,7 @@ function loadGallery() {
         const imgs = e.target.result;
         if(!imgs || imgs.length === 0) { grid.innerHTML = "<div style='text-align:center;color:#777;margin-top:20px;grid-column:1/-1;'>No images</div>"; return; }
         
-        // Reverse to show newest first
         const reversed = imgs.reverse();
-        
-        // PAGINATION CALCULATIONS
         const totalPages = Math.ceil(reversed.length / ITEMS_PER_PAGE);
         if (galleryPage < 1) galleryPage = 1;
         if (galleryPage > totalPages) galleryPage = totalPages;
@@ -946,10 +865,8 @@ function loadGallery() {
         const end = start + ITEMS_PER_PAGE;
         const pageItems = reversed.slice(start, end);
         
-        // Update GLOBAL HISTORY Source for Lightbox
         historyImagesData = pageItems;
         
-        // Render
         pageItems.forEach((item, index) => {
             const container = document.createElement('div');
             container.style.position = 'relative';
@@ -961,7 +878,7 @@ function loadGallery() {
             
             img.onclick = () => {
                 if(isSelectionMode) toggleSelectionForId(item.id, container);
-                else window.openFullscreenFromGallery(index); // Index is relative to current page
+                else window.openFullscreenFromGallery(index); 
             };
 
             const tick = document.createElement('div');
@@ -975,22 +892,18 @@ function loadGallery() {
             grid.appendChild(container);
         });
         
-        // Update Pagination Controls
         document.getElementById('pageIndicator').innerText = `Page ${galleryPage} / ${totalPages}`;
         document.getElementById('prevPageBtn').disabled = galleryPage === 1;
         document.getElementById('nextPageBtn').disabled = galleryPage === totalPages;
-        
         lucide.createIcons();
     }
 }
 
-// --- PAGINATION HANDLER ---
 window.changeGalleryPage = function(dir) {
     galleryPage += dir;
     loadGallery();
 }
 
-// --- GALLERY SELECTION ---
 window.toggleGallerySelectionMode = function() {
     isSelectionMode = !isSelectionMode;
     const btn = document.getElementById('galSelectBtn');
@@ -1030,7 +943,6 @@ window.deleteSelectedImages = function() {
     
     const tx = db.transaction(["images"], "readwrite");
     const store = tx.objectStore("images");
-    
     selectedImageIds.forEach(id => store.delete(id));
     
     tx.oncomplete = () => {
@@ -1075,7 +987,6 @@ window.slideImage = function(dir) {
     updateLightboxImage();
 }
 
-// --- DELETE FROM LIGHTBOX ---
 window.deleteCurrentFsImage = function() {
     const currentItem = currentGalleryImages[currentGalleryIndex];
     if(!currentItem) return;
@@ -1107,7 +1018,6 @@ function finishDeleteAction(item) {
     }
 }
 
-// --- DOWNLOAD BUTTON (UPDATED FOR NATIVE) ---
 window.downloadCurrent = function() {
     const src = document.getElementById('fsImage').src;
     saveToMobileGallery(src);
@@ -1117,6 +1027,8 @@ window.closeFsModal = () => document.getElementById('fullScreenModal').classList
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
 window.analyzeCurrentFs = () => { window.closeFsModal(); window.switchTab('ana'); fetch(document.getElementById('fsImage').src).then(res => res.blob()).then(processImageForAnalysis); }
 window.handleFileSelect = e => { const file = e.target.files[0]; if(!file) return; processImageForAnalysis(file); }
+
+// --- ANALYZER + COPY LOGIC ---
 async function processImageForAnalysis(blob) {
     const url = URL.createObjectURL(blob);
     const img = new Image();
@@ -1128,17 +1040,72 @@ async function processImageForAnalysis(blob) {
         document.getElementById('anaGallery').classList.remove('hidden');
     };
     img.src = url;
+    
+    // Parse metadata
     const text = await readPngMetadata(blob);
     document.getElementById('anaMeta').innerText = text || "No parameters found.";
+    
+    const btnContainer = document.getElementById('anaCopyButtons');
+    if (text) {
+        currentAnalyzedPrompts = parseGenInfo(text);
+        if(btnContainer) btnContainer.classList.remove('hidden');
+    } else {
+        currentAnalyzedPrompts = null;
+        if(btnContainer) btnContainer.classList.add('hidden');
+    }
 }
+
+function parseGenInfo(rawText) {
+    if (!rawText) return { pos: "", neg: "" };
+    let pos = "";
+    let neg = "";
+
+    const negSplit = rawText.split("Negative prompt:");
+    if (negSplit.length > 1) {
+        pos = negSplit[0].trim();
+        const paramsSplit = negSplit[1].split(/(\nSteps: |Steps: )/);
+        if (paramsSplit.length > 1) {
+            neg = paramsSplit[0].trim();
+        } else {
+            neg = negSplit[1].trim();
+        }
+    } else {
+        const paramSplit = rawText.split(/(\nSteps: |Steps: )/);
+        if (paramSplit.length > 1) {
+            pos = paramSplit[0].trim();
+        } else {
+             pos = rawText.trim();
+        }
+    }
+    return { pos, neg };
+}
+
+window.copyToSdxl = function() {
+    if (!currentAnalyzedPrompts) return;
+    document.getElementById('xl_prompt').value = currentAnalyzedPrompts.pos;
+    document.getElementById('xl_neg').value = currentAnalyzedPrompts.neg;
+    window.setMode('xl');
+    window.switchTab('gen');
+    if(Toast) Toast.show({ text: 'Copied to SDXL', duration: 'short' });
+}
+
+window.copyToFlux = function() {
+    if (!currentAnalyzedPrompts) return;
+    document.getElementById('flux_prompt').value = currentAnalyzedPrompts.pos;
+    window.setMode('flux');
+    window.switchTab('gen');
+    if(Toast) Toast.show({ text: 'Copied to FLUX', duration: 'short' });
+}
+
 function loadAutoDlState() { const c = document.getElementById('autoDlCheck'); if(c) c.checked = localStorage.getItem('bojroAutoSave') === 'true'; }
 window.saveAutoDlState = () => localStorage.setItem('bojroAutoSave', document.getElementById('autoDlCheck').checked);
-// --- PNG METADATA READER (FIX FOR ANALYZER) ---
+
+// --- PNG METADATA READER ---
 async function readPngMetadata(blob) {
     try {
         const buffer = await blob.arrayBuffer();
         const view = new DataView(buffer);
-        let offset = 8; // PNG header
+        let offset = 8; 
 
         let metadata = "";
 
@@ -1151,27 +1118,21 @@ async function readPngMetadata(blob) {
                 view.getUint8(offset + 7)
             );
 
-            // tEXt chunk
             if (type === 'tEXt') {
                 const data = new Uint8Array(buffer, offset + 8, length);
                 metadata += new TextDecoder().decode(data) + "\n";
             }
 
-            // iTXt chunk (used by Stable Diffusion)
             if (type === 'iTXt') {
                 const data = new Uint8Array(buffer, offset + 8, length);
                 const text = new TextDecoder().decode(data);
                 metadata += text + "\n";
             }
 
-            offset += 12 + length; // length + type + crc
+            offset += 12 + length; 
         }
-
-        // Cleanup + common SD formatting
         metadata = metadata.trim();
         if (!metadata) return null;
-
-        // Strip leading key if present ("parameters\0")
         metadata = metadata.replace(/^parameters\0/, '');
 
         return metadata;

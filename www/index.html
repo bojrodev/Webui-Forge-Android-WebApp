@@ -284,6 +284,11 @@
             <div style="margin-top: 15px;">
                 <label>Metadata</label>
                 <div id="anaMeta" class="glass-box" style="min-height: 100px; font-family: monospace; font-size: 10px; color: var(--text-muted); word-break: break-all;">Load image...</div>
+                
+                <div id="anaCopyButtons" class="row hidden" style="margin-top: 10px; gap: 10px;">
+                    <button onclick="copyToSdxl()" class="btn-small" style="background: var(--accent-gradient); color:white;">USE IN SDXL</button>
+                    <button onclick="copyToFlux()" class="btn-small" style="background: var(--glass-panel); border:1px solid var(--accent-primary); color:var(--accent-primary);">USE IN FLUX</button>
+                </div>
             </div>
         </div>
     </div>
@@ -325,7 +330,7 @@
                     <div class="col" style="margin-top:5px; gap:8px;">
                         
                         <div class="row">
-                            <input type="text" id="llmApiBase" placeholder="http://192.x.x.x:1234">
+                            <input type="text" id="llmApiBase" placeholder="http://192.xxx.x.x:1234">
                             <button onclick="connectToLlm()" class="btn-small" style="width: auto;">LINK</button>
                         </div>
 
