@@ -4,7 +4,11 @@ const ASSETS_TO_CACHE = [
   './index.html',
   './style.css',
   './app.js',
-  'https://unpkg.com/lucide@latest'
+  './lucide.js',
+  './icon.png',
+  './fonts/Inter-Regular.woff2',
+  './fonts/Inter-SemiBold.woff2',
+  './fonts/Inter-ExtraBold.woff2'
 ];
 
 self.addEventListener('install', (e) => {
