@@ -562,23 +562,108 @@ input[readonly], textarea[readonly] {
     font-size: 18px;
 }
 
-/* LoRA List */
-.lora-row {
+/* =========================================
+   LORA BROWSER STYLES
+   ========================================= */
+
+/* The main container for the LoRA item */
+.lora-item-row {
     background: var(--bg-panel);
-    padding: 12px;
-    margin-bottom: 6px;
+    padding: 8px; /* Reduced padding for compact look */
+    margin-bottom: 8px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
-    cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    color: var(--text-main);
-    font-size: 13px;
+    gap: 12px; /* Space between columns */
+    transition: all 0.2s;
 }
-.lora-row:active {
+
+.lora-item-row.active {
     border-color: var(--accent-primary);
-    background: var(--bg-input-focus);
+    background: rgba(255, 152, 0, 0.05); /* Optional subtle tint */
+}
+
+/* LEFT: Thumbnail */
+.lora-item-thumb {
+    width: 44px;
+    height: 66px; /* Portrait aspect ratio for LoRA cards */
+    border-radius: 4px;
+    object-fit: cover;
+    background: var(--bg-input);
+    flex-shrink: 0;
+    border: 1px solid var(--border-color);
+}
+
+/* MIDDLE: Name & Status */
+.lora-item-info {
+    flex: 1; /* Takes all available space */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.lora-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.lora-item-meta {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+.lora-item-row.active .lora-item-meta {
+    color: var(--accent-primary);
+}
+
+/* MIDDLE RIGHT: Config Editor Button */
+.lora-btn-action {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+.lora-btn-action:active {
+    background: var(--bg-input);
+    color: var(--text-main);
+}
+
+/* RIGHT: Add/Remove Toggle */
+.lora-btn-toggle {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--btn-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 50%; /* Circular button */
+    color: var(--text-main);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Active State for Toggle */
+.lora-item-row.active .lora-btn-toggle {
+    background: var(--accent-primary);
+    color: #000; /* Contrast icon color */
+    border-color: var(--accent-primary);
+    transform: rotate(360deg); /* Nice spin effect on activation */
 }
 
 /* =========================================
