@@ -39,6 +39,7 @@
     --accent-secondary: #ff5722;  /* Secondary for gradients */
     --accent-glow: rgba(255, 152, 0, 0.4);
     --accent-gradient: linear-gradient(135deg, #ff9800, #ff5722);
+    --accent-primary-rgb: 255, 152, 0; /* For RGBA utils */
     
     --btn-bg: #2d2d35;
     --btn-bg-hover: #3d3d45;
@@ -65,6 +66,7 @@
     --accent-secondary: #2979ff;
     --accent-glow: rgba(0, 229, 255, 0.4);
     --accent-gradient: linear-gradient(135deg, #00e5ff, #2979ff);
+    --accent-primary-rgb: 0, 229, 255;
     
     --border-color: #1e293b;
 }
@@ -87,6 +89,7 @@
     --accent-secondary: #ff3b30;
     --accent-glow: rgba(255, 149, 0, 0.2);
     --accent-gradient: linear-gradient(135deg, #ff9500, #ff3b30);
+    --accent-primary-rgb: 255, 149, 0;
 
     --btn-bg: #e5e5ea;
     --btn-bg-hover: #d1d1d6;
@@ -116,6 +119,13 @@ body {
     min-height: 100vh;
     overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile web app */
     transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Canvas Fix: Ensure drawing doesn't scroll the page */
+canvas {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 /* Utilities */
@@ -198,6 +208,30 @@ input[type="checkbox"] {
 input[readonly], textarea[readonly] {
     background: var(--bg-panel);
     opacity: 0.7;
+}
+
+/* Orange Slider */
+.orange-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+    outline: none;
+}
+.orange-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(var(--accent-primary-rgb), 0.5);
+    transition: transform 0.1s;
+}
+.orange-slider::-webkit-slider-thumb:active {
+    transform: scale(1.2);
 }
 
 /* =========================================
@@ -316,6 +350,13 @@ input[readonly], textarea[readonly] {
     border-color: var(--accent-primary);
 }
 
+.glass-icon {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+}
+
 /* =========================================
    6. CONTAINERS & PANELS
    ========================================= */
@@ -418,6 +459,23 @@ input[readonly], textarea[readonly] {
 }
 
 .res-switch:active {
+    background: var(--accent-primary);
+    color: #000;
+    border-color: var(--accent-primary);
+}
+
+/* Toggle Option (Inpaint) */
+.toggle-opt {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--bg-input);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+}
+.toggle-opt.active {
     background: var(--accent-primary);
     color: #000;
     border-color: var(--accent-primary);
@@ -566,7 +624,6 @@ input[readonly], textarea[readonly] {
    LORA BROWSER STYLES
    ========================================= */
 
-/* The main container for the LoRA item */
 .lora-item-row {
     background: var(--bg-panel);
     padding: 8px; /* Reduced padding for compact look */
@@ -584,10 +641,9 @@ input[readonly], textarea[readonly] {
     background: rgba(255, 152, 0, 0.05); /* Optional subtle tint */
 }
 
-/* LEFT: Thumbnail */
 .lora-item-thumb {
     width: 44px;
-    height: 66px; /* Portrait aspect ratio for LoRA cards */
+    height: 66px; 
     border-radius: 4px;
     object-fit: cover;
     background: var(--bg-input);
@@ -595,9 +651,8 @@ input[readonly], textarea[readonly] {
     border: 1px solid var(--border-color);
 }
 
-/* MIDDLE: Name & Status */
 .lora-item-info {
-    flex: 1; /* Takes all available space */
+    flex: 1; 
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -624,7 +679,6 @@ input[readonly], textarea[readonly] {
     color: var(--accent-primary);
 }
 
-/* MIDDLE RIGHT: Config Editor Button */
 .lora-btn-action {
     width: 36px;
     height: 36px;
@@ -642,7 +696,6 @@ input[readonly], textarea[readonly] {
     color: var(--text-main);
 }
 
-/* RIGHT: Add/Remove Toggle */
 .lora-btn-toggle {
     width: 44px;
     height: 44px;
@@ -658,7 +711,6 @@ input[readonly], textarea[readonly] {
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Active State for Toggle */
 .lora-item-row.active .lora-btn-toggle {
     background: var(--accent-primary);
     color: #000; /* Contrast icon color */

@@ -10,7 +10,33 @@ const ResolverService = window.Capacitor ? window.Capacitor.Plugins.ResolverServ
 
 // --- STATE ---
 let currentMode = 'xl'; 
+let currentTask = 'txt'; // 'txt', 'inp'
+let currentInpaintMode = 'fill'; // 'fill' (Whole) or 'mask' (Only Masked)
+let currentBrushMode = 'draw'; // 'draw' or 'erase'
 let db;
+
+// EDITOR STATE
+let editorImage = null;
+let editorScale = 1;
+let editorTranslateX = 0;
+let editorTranslateY = 0;
+let editorMinScale = 1;
+let editorTargetW = 1024;
+let editorTargetH = 1024;
+let cropBox = { x: 0, y: 0, w: 0, h: 0 }; 
+
+let isEditorActive = false;
+let pinchStartDist = 0;
+let panStart = { x: 0, y: 0 };
+let startScale = 1;
+let startTranslate = { x: 0, y: 0 };
+
+// MAIN CANVAS STATE (Inpainting)
+let mainCanvas, mainCtx;
+let maskCanvas, maskCtx; // Hidden canvas for mask logic (Black/White)
+let sourceImageB64 = null; // The final cropped image string
+let isDrawing = false;
+let historyStates = [];
 
 // DATA & PAGINATION
 let historyImagesData = []; 
@@ -19,7 +45,7 @@ let currentGalleryIndex = 0;
 let galleryPage = 1;
 const ITEMS_PER_PAGE = 50;
 
-let allLoras = [];
+let allLoras = []; 
 let loraConfigs = {}; 
 let loraDebounceTimer;
 let HOST = "";
@@ -31,17 +57,26 @@ let totalBatchSteps = 0;
 let currentBatchProgress = 0;
 let isSingleJobRunning = false; 
 
-let notificationUpdateThrottle = 0; 
-const NOTIFICATION_UPDATE_INTERVAL_MS = 1000; 
-
 let isSelectionMode = false;
 let selectedImageIds = new Set();
 let currentAnalyzedPrompts = null;
 
+let llmSettings = {
+    baseUrl: 'http://localhost:11434', key: '', model: '',
+    system_xl: `You are a Prompt Generator for Image Generation. OBJECTIVE: Convert user concepts into a dense, highly detailed string of comma-separated tags.`,
+    system_flux: `You are a Image Prompter. OBJECTIVE: Convert user concepts into a detailed, natural language description.`
+};
+let llmState = { xl: { input: "", output: "" }, flux: { input: "", output: "" } };
+let activeLlmMode = 'xl';
+
 // --- INITIALIZATION ---
 window.onload = function() {
     try {
-        injectConfigModal(); // FIX: Inject the missing Config Modal HTML
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        
+        injectConfigModal(); 
         loadHostIp();
         loadQueueState(); 
         renderQueueAll(); 
@@ -50,6 +85,10 @@ window.onload = function() {
         createNotificationChannel(); 
         loadLlmSettings(); 
         
+        // Init Inpainting Systems
+        initMainCanvas(); 
+        setupEditorEvents();
+
         // Battery Check
         if (!localStorage.getItem('bojroBatteryOpt')) {
             const batModal = document.getElementById('batteryModal');
@@ -61,12 +100,15 @@ window.onload = function() {
             console.log("Auto-connecting...");
             window.connect(true); 
         }
+        console.log("App Initialized Successfully");
     } catch (e) {
         console.error("Initialization Error:", e);
+        alert("App Init Failed: " + e.message);
     }
 }
 
-// --- DYNAMIC MODAL INJECTION (Fix for missing Config Editor) ---
+// --- UTILITIES ---
+
 function injectConfigModal() {
     if (document.getElementById('loraConfigModal')) return;
     const div = document.createElement('div');
@@ -130,34 +172,34 @@ function saveQueueState() {
 function updateQueueBadge() {
     const totalPending = queueState.ongoing.length + queueState.next.length;
     const badge = document.getElementById('queueBadge');
-    badge.innerText = totalPending;
-    badge.classList.toggle('hidden', totalPending === 0);
+    if(badge) {
+        badge.innerText = totalPending;
+        badge.classList.toggle('hidden', totalPending === 0);
+    }
 }
 
-// --- BACKGROUND / NOTIFICATION LOGIC ---
 async function createNotificationChannel() {
     if (!LocalNotifications) return;
     try {
         await LocalNotifications.createChannel({
-            id: 'gen_complete_channel', 
+            id: 'gen_complete_channel',
             name: 'Generation Complete',
-            importance: 4, 
+            importance: 4,
             visibility: 1,
             vibration: true
         });
         await LocalNotifications.createChannel({
             id: 'batch_channel',
             name: 'Generation Status',
-            importance: 2, 
+            importance: 2,
             visibility: 1,
-            vibration: false 
+            vibration: false
         });
     } catch(e) {}
 }
 
 function setupBackgroundListeners() {
     if (!App) return;
-    App.addListener('pause', async () => {});
     App.addListener('resume', async () => {
         if (LocalNotifications) {
             try {
@@ -171,7 +213,6 @@ function setupBackgroundListeners() {
     });
 }
 
-// Update the Silent Progress Bar
 async function updateBatchNotification(title, force = false, body = "") {
     let progressVal = 0;
     try {
@@ -190,12 +231,11 @@ async function updateBatchNotification(title, force = false, body = "") {
                 body: body,
                 progress: progressVal
             });
-            return; 
+            return;
         } catch (e) { console.error("Native Service Error:", e); }
     }
 }
 
-// Send a "Done" alert that stays in tray
 async function sendCompletionNotification(msg) {
     if (LocalNotifications) {
         try {
@@ -203,7 +243,7 @@ async function sendCompletionNotification(msg) {
                 notifications: [{
                     title: "Mission Complete",
                     body: msg,
-                    id: 2002, 
+                    id: 2002,
                     channelId: 'gen_complete_channel',
                     smallIcon: "ic_launcher"
                 }]
@@ -253,6 +293,431 @@ function getVramMapping() {
     }
 }
 
+// DB
+const request = indexedDB.open("BojroHybridDB", 1);
+request.onupgradeneeded = e => { db = e.target.result; db.createObjectStore("images", { keyPath: "id", autoIncrement: true }); };
+request.onsuccess = e => { db = e.target.result; loadGallery(); };
+
+function saveImageToDB(base64) {
+    return new Promise((resolve, reject) => {
+        if(!db) { resolve(null); return; }
+        const tx = db.transaction(["images"], "readwrite");
+        const store = tx.objectStore("images");
+        const req = store.add({ data: base64, date: new Date().toLocaleString() });
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = () => resolve(null);
+    });
+}
+
+window.clearDbGallery = function() {
+    if(confirm("Delete entire history? This cannot be undone.")) {
+        const tx = db.transaction(["images"], "readwrite");
+        tx.objectStore("images").clear();
+        tx.oncomplete = () => {
+            isSelectionMode = false;
+            selectedImageIds.clear();
+            document.getElementById('galDeleteBtn').classList.add('hidden');
+            galleryPage = 1;
+            loadGallery();
+        };
+    }
+}
+
+// -----------------------------------------------------------
+// FIXED: IMAGE EDITOR LOGIC (CANVAS-BASED)
+// -----------------------------------------------------------
+
+function setupEditorEvents() {
+    const cvs = document.getElementById('editorCanvas');
+    if(!cvs) return;
+    
+    cvs.style.touchAction = 'none';
+
+    // Touch
+    cvs.addEventListener('touchstart', handleTouchStart, { passive: false });
+    cvs.addEventListener('touchmove', handleTouchMove, { passive: false });
+    cvs.addEventListener('touchend', handleTouchEnd);
+    
+    // Mouse
+    cvs.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+}
+
+window.openEditorFromFile = function(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        const img = new Image();
+        img.src = evt.target.result;
+        img.onload = () => {
+            editorImage = img;
+            
+            // 1. Show modal FIRST to ensure canvas has dimensions
+            document.getElementById('editorModal').classList.remove('hidden');
+
+            // 2. Wait for layout, then calculate dimensions and force center (Late Init)
+            setTimeout(() => {
+                editorTargetW = 1024;
+                editorTargetH = 1024;
+                recalcEditorLayout();
+                resetEditorView(); // <--- FIX: Forces proper centering logic
+            }, 50);
+        };
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; 
+}
+
+window.setEditorRatio = function(targetW, targetH) {
+    editorTargetW = targetW;
+    editorTargetH = targetH;
+    recalcEditorLayout();
+    resetEditorView();
+}
+
+function recalcEditorLayout() {
+    if(!editorImage) return;
+    const viewport = document.getElementById('editorViewport');
+    const cvs = document.getElementById('editorCanvas');
+    
+    // 1. Resize canvas to match screen
+    cvs.width = viewport.clientWidth;
+    cvs.height = viewport.clientHeight;
+    
+    // 2. Calculate Box Size (fit within canvas with padding)
+    const padding = 20;
+    const availableW = cvs.width - (padding * 2);
+    const availableH = cvs.height - (padding * 2);
+    
+    const targetRatio = editorTargetW / editorTargetH;
+    
+    let boxW = availableW;
+    let boxH = boxW / targetRatio;
+    
+    if (boxH > availableH) {
+        boxH = availableH;
+        boxW = boxH * targetRatio;
+    }
+    
+    // 3. Center the box
+    cropBox = {
+        x: (cvs.width - boxW) / 2,
+        y: (cvs.height - boxH) / 2,
+        w: boxW,
+        h: boxH
+    };
+    
+    drawEditor();
+}
+
+function resetEditorView() {
+    if(!editorImage) return;
+    
+    // Calculate min scale to cover the crop box
+    const scaleW = cropBox.w / editorImage.naturalWidth;
+    const scaleH = cropBox.h / editorImage.naturalHeight;
+    editorMinScale = Math.max(scaleW, scaleH);
+    
+    // Set current scale to min (cover)
+    editorScale = editorMinScale;
+    
+    // Center image relative to the CANVAS center
+    const cvs = document.getElementById('editorCanvas');
+    editorTranslateX = (cvs.width - (editorImage.naturalWidth * editorScale)) / 2;
+    editorTranslateY = (cvs.height - (editorImage.naturalHeight * editorScale)) / 2;
+    
+    // Reset Sliders
+    document.getElementById('editScale').value = 1;
+    document.getElementById('editX').value = 0;
+    document.getElementById('editY').value = 0;
+    
+    drawEditor();
+}
+
+window.updateEditorTransform = function() {
+    if(!editorImage) return;
+    
+    const scaleMult = parseFloat(document.getElementById('editScale').value);
+    const offX = parseFloat(document.getElementById('editX').value);
+    const offY = parseFloat(document.getElementById('editY').value);
+    
+    const cvs = document.getElementById('editorCanvas');
+    
+    // Calculate current dimensions
+    const currentW = editorImage.naturalWidth * (editorMinScale * scaleMult);
+    const currentH = editorImage.naturalHeight * (editorMinScale * scaleMult);
+    
+    // Base is centered relative to canvas
+    const baseX = (cvs.width - currentW) / 2;
+    const baseY = (cvs.height - currentH) / 2;
+    
+    editorScale = editorMinScale * scaleMult;
+    editorTranslateX = baseX + offX;
+    editorTranslateY = baseY + offY;
+    
+    drawEditor();
+}
+
+function drawEditor() {
+    if(!editorImage) return;
+    const cvs = document.getElementById('editorCanvas');
+    const ctx = cvs.getContext('2d');
+    
+    // 1. Clear
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    
+    // 2. Draw Image (Transformed)
+    ctx.save();
+    ctx.translate(editorTranslateX, editorTranslateY);
+    ctx.scale(editorScale, editorScale);
+    ctx.drawImage(editorImage, 0, 0);
+    ctx.restore();
+    
+    // 3. Draw Dimmed Overlay with "Hole" using Path Winding
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    // Outer Rectangle (Clockwise)
+    ctx.rect(0, 0, cvs.width, cvs.height);
+    // Inner Rectangle (Counter-Clockwise) -> Creates Hole
+    ctx.rect(cropBox.x + cropBox.w, cropBox.y, -cropBox.w, cropBox.h);
+    ctx.fill();
+    
+    // 4. Draw Border
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cropBox.x, cropBox.y, cropBox.w, cropBox.h);
+}
+
+// Touch Handling
+function handleTouchStart(e) {
+    if(e.target.closest('input')) return;
+    e.preventDefault();
+    if(e.touches.length === 2) {
+        pinchStartDist = getDist(e.touches[0], e.touches[1]);
+        startScale = editorScale;
+        startTranslate = { x: editorTranslateX, y: editorTranslateY };
+    } else if (e.touches.length === 1) {
+        isEditorActive = true;
+        panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        startTranslate = { x: editorTranslateX, y: editorTranslateY };
+    }
+}
+function handleTouchMove(e) {
+    if(e.target.closest('input')) return;
+    e.preventDefault();
+    if(e.touches.length === 2 && pinchStartDist > 0) {
+        const dist = getDist(e.touches[0], e.touches[1]);
+        const scaleFactor = dist / pinchStartDist;
+        editorScale = startScale * scaleFactor;
+        
+        const cvs = document.getElementById('editorCanvas');
+        const centerX = cvs.width / 2;
+        const centerY = cvs.height / 2;
+        editorTranslateX = centerX - (centerX - startTranslate.x) * scaleFactor;
+        editorTranslateY = centerY - (centerY - startTranslate.y) * scaleFactor;
+        drawEditor();
+    } else if (e.touches.length === 1 && isEditorActive) {
+        const dx = e.touches[0].clientX - panStart.x;
+        const dy = e.touches[0].clientY - panStart.y;
+        editorTranslateX = startTranslate.x + dx;
+        editorTranslateY = startTranslate.y + dy;
+        drawEditor();
+    }
+}
+function handleTouchEnd() { isEditorActive = false; pinchStartDist = 0; }
+function handleMouseDown(e) { isEditorActive = true; panStart = { x: e.clientX, y: e.clientY }; startTranslate = { x: editorTranslateX, y: editorTranslateY }; }
+function handleMouseMove(e) { 
+    if(!isEditorActive) return; 
+    e.preventDefault(); 
+    const dx = e.clientX - panStart.x; 
+    const dy = e.clientY - panStart.y; 
+    editorTranslateX = startTranslate.x + dx; 
+    editorTranslateY = startTranslate.y + dy; 
+    drawEditor(); 
+}
+function handleMouseUp() { isEditorActive = false; }
+function getDist(t1, t2) { return Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2)); }
+
+window.applyEditorChanges = function() {
+    const finalCvs = document.createElement('canvas');
+    finalCvs.width = editorTargetW;
+    finalCvs.height = editorTargetH;
+    const ctx = finalCvs.getContext('2d');
+    
+    // Map visual crop box coords to image coords
+    const relX = cropBox.x - editorTranslateX;
+    const relY = cropBox.y - editorTranslateY;
+    
+    const sourceX = relX / editorScale;
+    const sourceY = relY / editorScale;
+    const sourceW = cropBox.w / editorScale;
+    const sourceH = cropBox.h / editorScale;
+    
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(editorImage, sourceX, sourceY, sourceW, sourceH, 0, 0, editorTargetW, editorTargetH);
+    
+    sourceImageB64 = finalCvs.toDataURL('image/png');
+    resetInpaintCanvas(); 
+    
+    document.getElementById('img-input-container').style.display = 'none';
+    document.getElementById('canvasWrapper').classList.remove('hidden');
+    document.getElementById('editorModal').classList.add('hidden');
+    
+    const mode = currentMode;
+    document.getElementById(`${mode}_width`).value = editorTargetW;
+    document.getElementById(`${mode}_height`).value = editorTargetH;
+}
+
+window.closeEditor = () => document.getElementById('editorModal').classList.add('hidden');
+
+// --- INPAINTING CANVAS LOGIC ---
+function initMainCanvas() {
+    mainCanvas = document.getElementById('paintCanvas');
+    if(!mainCanvas) return;
+    mainCtx = mainCanvas.getContext('2d');
+    maskCanvas = document.createElement('canvas');
+    maskCtx = maskCanvas.getContext('2d');
+    
+    mainCanvas.style.touchAction = 'none';
+    
+    mainCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPaint(e.touches[0]); }, {passive: false});
+    mainCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); painting(e.touches[0]); }, {passive: false});
+    mainCanvas.addEventListener('touchend', (e) => { e.preventDefault(); stopPaint(); }, {passive: false});
+    
+    mainCanvas.addEventListener('mousedown', startPaint);
+    mainCanvas.addEventListener('mousemove', painting);
+    mainCanvas.addEventListener('mouseup', stopPaint);
+    mainCanvas.addEventListener('mouseleave', stopPaint);
+}
+
+function resetInpaintCanvas() {
+    if(!sourceImageB64) return;
+    const img = new Image();
+    img.src = sourceImageB64;
+    img.onload = () => {
+        mainCanvas.width = editorTargetW;
+        mainCanvas.height = editorTargetH;
+        maskCanvas.width = editorTargetW;
+        maskCanvas.height = editorTargetH;
+        
+        mainCtx.drawImage(img, 0, 0);
+        maskCtx.fillStyle = "black";
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        
+        historyStates = []; 
+        saveHistory();
+    };
+}
+
+function startPaint(e) {
+    isDrawing = true;
+    const rect = mainCanvas.getBoundingClientRect();
+    const scaleX = mainCanvas.width / rect.width;
+    const scaleY = mainCanvas.height / rect.height;
+    
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    
+    mainCtx.beginPath(); mainCtx.moveTo(x, y);
+    maskCtx.beginPath(); maskCtx.moveTo(x, y);
+}
+
+function painting(e) {
+    if(!isDrawing) return;
+    const rect = mainCanvas.getBoundingClientRect();
+    const scaleX = mainCanvas.width / rect.width;
+    const scaleY = mainCanvas.height / rect.height;
+    
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    
+    const size = document.getElementById('brushSize').value;
+    
+    mainCtx.lineWidth = size; mainCtx.lineCap = 'round'; mainCtx.lineJoin = 'round';
+    maskCtx.lineWidth = size; maskCtx.lineCap = 'round'; maskCtx.lineJoin = 'round';
+    
+    if (currentBrushMode === 'draw') {
+        mainCtx.globalCompositeOperation = 'source-over';
+        mainCtx.strokeStyle = 'rgba(255, 165, 0, 0.5)'; 
+        maskCtx.globalCompositeOperation = 'source-over';
+        maskCtx.strokeStyle = 'white';
+    } else {
+        maskCtx.strokeStyle = 'black';
+        maskCtx.globalCompositeOperation = 'source-over';
+    }
+    
+    if(currentBrushMode === 'draw') { mainCtx.lineTo(x, y); mainCtx.stroke(); } 
+    maskCtx.lineTo(x, y); maskCtx.stroke();
+}
+
+function stopPaint() {
+    if(isDrawing) {
+        isDrawing = false;
+        mainCtx.closePath(); maskCtx.closePath();
+        mainCtx.globalCompositeOperation = 'source-over';
+        if(currentBrushMode === 'erase') {
+            const img = new Image();
+            img.src = sourceImageB64;
+            img.onload = () => { mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height); mainCtx.drawImage(img, 0, 0); };
+        }
+        saveHistory();
+    }
+}
+
+function saveHistory() {
+    if(historyStates.length > 10) historyStates.shift();
+    historyStates.push({ visual: mainCanvas.toDataURL(), mask: maskCanvas.toDataURL() });
+}
+
+window.undoLastStroke = function() {
+    if (historyStates.length > 1) {
+        historyStates.pop();
+        const lastState = historyStates[historyStates.length - 1];
+        const imgV = new Image(); imgV.src = lastState.visual;
+        const imgM = new Image(); imgM.src = lastState.mask;
+        imgV.onload = () => { mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height); mainCtx.drawImage(imgV, 0, 0); };
+        imgM.onload = () => { maskCtx.clearRect(0,0, maskCanvas.width, maskCanvas.height); maskCtx.drawImage(imgM, 0, 0); }
+    } else { resetInpaintCanvas(); }
+}
+
+window.clearMask = () => resetInpaintCanvas();
+window.setBrushMode = function(mode) {
+    currentBrushMode = mode;
+    document.querySelectorAll('#inpaintControls .toggle-opt').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tool-${mode}`).classList.add('active');
+}
+window.setInpaintMode = function(mode) {
+    currentInpaintMode = mode;
+    document.getElementById('mode-fill').classList.toggle('active', mode === 'fill');
+    document.getElementById('mode-mask').classList.toggle('active', mode === 'mask');
+}
+
+// -----------------------------------------------------------
+// GENERAL APP LOGIC
+// -----------------------------------------------------------
+
+window.switchTab = function(view) {
+    document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-' + view).classList.remove('hidden');
+    const items = document.querySelectorAll('.dock-item');
+    items.forEach(item => item.classList.remove('active'));
+    if(view === 'gen') { items[0].classList.add('active'); currentTask = 'txt'; }
+    if(view === 'inp') { items[1].classList.add('active'); currentTask = 'inp'; }
+    if(view === 'que') { items[2].classList.add('active'); renderQueueAll(); }
+    if(view === 'gal') { items[3].classList.add('active'); loadGallery(); }
+    if(view === 'ana') items[4].classList.add('active');
+}
+
 window.setMode = async function(mode) {
     if (currentMode !== mode) { if(HOST) await unloadModel(true); }
     currentMode = mode;
@@ -288,46 +753,6 @@ window.setMode = async function(mode) {
     }
 }
 
-const request = indexedDB.open("BojroHybridDB", 1);
-request.onupgradeneeded = e => { db = e.target.result; db.createObjectStore("images", { keyPath: "id", autoIncrement: true }); };
-request.onsuccess = e => { db = e.target.result; loadGallery(); };
-
-function saveImageToDB(base64) {
-    return new Promise((resolve, reject) => {
-        if(!db) { resolve(null); return; }
-        const tx = db.transaction(["images"], "readwrite");
-        const store = tx.objectStore("images");
-        const req = store.add({ data: base64, date: new Date().toLocaleString() });
-        req.onsuccess = (e) => resolve(e.target.result); 
-        req.onerror = () => resolve(null);
-    });
-}
-
-window.clearDbGallery = function() {
-    if(confirm("Delete entire history? This cannot be undone.")) {
-        const tx = db.transaction(["images"], "readwrite");
-        tx.objectStore("images").clear();
-        tx.oncomplete = () => {
-            isSelectionMode = false;
-            selectedImageIds.clear();
-            document.getElementById('galDeleteBtn').classList.add('hidden');
-            galleryPage = 1; 
-            loadGallery();
-        };
-    }
-}
-
-window.switchTab = function(view) {
-    document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
-    document.getElementById('view-' + view).classList.remove('hidden');
-    const items = document.querySelectorAll('.dock-item');
-    items.forEach(item => item.classList.remove('active'));
-    if(view === 'gen') items[0].classList.add('active');
-    if(view === 'que') { items[1].classList.add('active'); renderQueueAll(); }
-    if(view === 'gal') { items[2].classList.add('active'); loadGallery(); }
-    if(view === 'ana') items[3].classList.add('active');
-}
-
 function loadHostIp() { const ip = localStorage.getItem('bojroHostIp'); if(ip) document.getElementById('hostIp').value = ip; }
 
 window.connect = async function(silent = false) {
@@ -347,6 +772,7 @@ window.connect = async function(silent = false) {
         dot.style.background = "#00e676"; dot.classList.add('on');
         localStorage.setItem('bojroHostIp', HOST);
         document.getElementById('genBtn').disabled = false;
+        
         await Promise.all([fetchModels(), fetchSamplers(), fetchLoras(), fetchVaes()]);
         
         if(!silent) if(Toast) Toast.show({text: 'Server Linked Successfully', duration: 'short', position: 'center'});
@@ -361,76 +787,89 @@ async function fetchModels() {
         const res = await fetch(`${HOST}/sdapi/v1/sd-models`, { headers: getHeaders() });
         const data = await res.json();
         const selXL = document.getElementById('xl_modelSelect'); selXL.innerHTML = "";
-        data.forEach(m => selXL.appendChild(new Option(m.model_name, m.title)));
         const selFlux = document.getElementById('flux_modelSelect'); selFlux.innerHTML = "";
-        data.forEach(m => selFlux.appendChild(new Option(m.model_name, m.title)));
-        ['xl', 'flux'].forEach(mode => {
-            const saved = localStorage.getItem('bojroModel_'+mode);
-            if(saved) document.getElementById(mode+'_modelSelect').value = saved;
+        const selInp = document.getElementById('inp_modelSelect'); selInp.innerHTML = "";
+        data.forEach(m => {
+            selXL.appendChild(new Option(m.model_name, m.title));
+            selFlux.appendChild(new Option(m.model_name, m.title));
+            selInp.appendChild(new Option(m.model_name, m.title));
         });
+        ['xl', 'flux', 'inp'].forEach(mode => { const saved = localStorage.getItem('bojroModel_'+mode); if(saved) document.getElementById(mode+'_modelSelect').value = saved; });
     } catch(e){}
 }
+
 async function fetchSamplers() {
     try {
         const res = await fetch(`${HOST}/sdapi/v1/samplers`, { headers: getHeaders() });
         const data = await res.json();
         const selXL = document.getElementById('xl_sampler'); selXL.innerHTML = "";
-        data.forEach(s => selXL.appendChild(new Option(s.name, s.name)));
         const selFlux = document.getElementById('flux_sampler'); selFlux.innerHTML = "";
-        data.forEach(s => { const opt = new Option(s.name, s.name); if(s.name === "Euler") opt.selected = true; selFlux.appendChild(opt); });
+        const selInp = document.getElementById('inp_sampler'); selInp.innerHTML = "";
+        data.forEach(s => {
+            selXL.appendChild(new Option(s.name, s.name));
+            selInp.appendChild(new Option(s.name, s.name));
+            const opt = new Option(s.name, s.name); if(s.name === "Euler") opt.selected = true; selFlux.appendChild(opt);
+        });
     } catch(e){}
 }
 
-// --- NEW LORA FETCH LOGIC ---
 async function fetchLoras() { 
     try { 
         const res = await fetch(`${HOST}/sdapi/v1/loras`, { headers: getHeaders() }); 
         allLoras = await res.json(); 
-        const saved = localStorage.getItem('bojroLoraConfigs');
-        if(saved) loraConfigs = JSON.parse(saved);
-        console.log("LoRAs Loaded:", allLoras.length);
-    } catch(e){ console.error("LoRA Fetch Error", e); } 
+        const saved = localStorage.getItem('bojroLoraConfigs'); 
+        if(saved) loraConfigs = JSON.parse(saved); 
+    } catch(e){} 
 }
 
-// --- NEW SIDECAR CONFIG LOAD ---
-async function loadSidecarConfig(loraName, loraPath) {
-    if (loraConfigs[loraName]) return loraConfigs[loraName];
-    if (!loraPath) return { weight: 1.0, trigger: "" };
-    try {
-        // Convert paths like "models/Lora/foo.safetensors" to "models/Lora/foo.json"
-        const basePath = loraPath.substring(0, loraPath.lastIndexOf('.'));
-        const jsonUrl = `${HOST}/file=${basePath}.json`;
-        const res = await fetch(jsonUrl);
-        if (res.ok) {
-            const data = await res.json();
-            // Map JSON keys to our internal config
-            const newConfig = {
-                weight: data["preferred weight"] || data["weight"] || 1.0,
-                trigger: data["activation text"] || data["trigger words"] || data["trigger"] || ""
-            };
-            loraConfigs[loraName] = newConfig;
-            return newConfig;
-        }
-    } catch (e) {}
-    // Default fallback
-    return { weight: 1.0, trigger: "" };
+async function loadSidecarConfig(loraName, loraPath) { 
+    if (loraConfigs[loraName]) return loraConfigs[loraName]; 
+    if (!loraPath) return { weight: 1.0, trigger: "" }; 
+    try { 
+        const basePath = loraPath.substring(0, loraPath.lastIndexOf('.')); 
+        const jsonUrl = `${HOST}/file=${basePath}.json`; 
+        const res = await fetch(jsonUrl); 
+        if (res.ok) { 
+            const data = await res.json(); 
+            const newConfig = { weight: data["preferred weight"] || data["weight"] || 1.0, trigger: data["activation text"] || data["trigger words"] || data["trigger"] || "" }; 
+            loraConfigs[loraName] = newConfig; 
+            return newConfig; 
+        } 
+    } catch (e) {} 
+    return { weight: 1.0, trigger: "" }; 
 }
 
-async function fetchVaes() {
-    const slots = [document.getElementById('flux_vae'), document.getElementById('flux_clip'), document.getElementById('flux_t5')];
-    slots.forEach(s => s.innerHTML = "<option value='Automatic'>Automatic</option>");
-    let list = [];
-    try { const res = await fetch(`${HOST}/sdapi/v1/sd-modules`, { headers: getHeaders() }); const data = await res.json(); if(data && data.length) list = data.map(m => m.model_name); } catch(e) {}
-    if(list.length > 0) { slots.forEach(sel => { list.forEach(name => { if (name !== "Automatic" && !Array.from(sel.options).some(o => o.value === name)) sel.appendChild(new Option(name, name)); }); }); }
-    ['flux_vae', 'flux_clip', 'flux_t5'].forEach(id => { const saved = localStorage.getItem('bojro_'+id); if(saved && Array.from(document.getElementById(id).options).some(o => o.value === saved)) document.getElementById(id).value = saved; });
-    const savedBits = localStorage.getItem('bojro_flux_bits'); if(savedBits) document.getElementById('flux_bits').value = savedBits;
+async function fetchVaes() { 
+    const slots = [document.getElementById('flux_vae'), document.getElementById('flux_clip'), document.getElementById('flux_t5')]; 
+    slots.forEach(s => s.innerHTML = "<option value='Automatic'>Automatic</option>"); 
+    let list = []; 
+    try { 
+        const res = await fetch(`${HOST}/sdapi/v1/sd-modules`, { headers: getHeaders() }); 
+        const data = await res.json(); 
+        if(data && data.length) list = data.map(m => m.model_name); 
+    } catch(e) {} 
+    if(list.length > 0) { 
+        slots.forEach(sel => { 
+            list.forEach(name => { 
+                if (name !== "Automatic" && !Array.from(sel.options).some(o => o.value === name)) sel.appendChild(new Option(name, name)); 
+            }); 
+        }); 
+    } 
+    ['flux_vae', 'flux_clip', 'flux_t5'].forEach(id => { 
+        const saved = localStorage.getItem('bojro_'+id); 
+        if(saved && Array.from(document.getElementById(id).options).some(o => o.value === saved)) document.getElementById(id).value = saved; 
+    }); 
+    const savedBits = localStorage.getItem('bojro_flux_bits'); 
+    if(savedBits) document.getElementById('flux_bits').value = savedBits; 
 }
 
 window.saveSelection = function(key) {
     if(key === 'xl') localStorage.setItem('bojroModel_xl', document.getElementById('xl_modelSelect').value);
     else if(key === 'flux') localStorage.setItem('bojroModel_flux', document.getElementById('flux_modelSelect').value);
+    else if(key === 'inp') localStorage.setItem('bojroModel_inp', document.getElementById('inp_modelSelect').value);
     else if(key === 'flux_bits') localStorage.setItem('bojro_flux_bits', document.getElementById('flux_bits').value);
 }
+
 window.saveTrident = function() {
     ['flux_vae', 'flux_clip', 'flux_t5'].forEach(id => localStorage.setItem('bojro_'+id, document.getElementById(id).value));
 }
@@ -439,48 +878,35 @@ window.unloadModel = async function(silent = false) {
     if(!silent && !confirm("Unload current model?")) return;
     try { await fetch(`${HOST}/sdapi/v1/unload-checkpoint`, { method: 'POST', headers: getHeaders() }); if(!silent) alert("Unloaded"); } catch(e) {}
 }
-async function postOption(payload) { 
-    const res = await fetch(`${HOST}/sdapi/v1/options`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) }); 
+
+async function postOption(payload) {
+    const res = await fetch(`${HOST}/sdapi/v1/options`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
     if(!res.ok) throw new Error("API Error " + res.status);
 }
+
 window.setRes = (mode, w, h) => { document.getElementById(`${mode}_width`).value = w; document.getElementById(`${mode}_height`).value = h; }
-window.flipRes = (mode) => {
-    const w = document.getElementById(`${mode}_width`); const h = document.getElementById(`${mode}_height`);
-    const t = w.value; w.value = h.value; h.value = t;
-}
-function normalize(str) { 
-    if (!str) return "";
-    const noHash = str.split(' [')[0].trim();
-    return noHash.replace(/\\/g, '/').split('/').pop().toLowerCase();
+window.flipRes = (mode) => { const w = document.getElementById(`${mode}_width`); const h = document.getElementById(`${mode}_height`); const t = w.value; w.value = h.value; h.value = t; }
+function normalize(str) { if (!str) return ""; const noHash = str.split(' [')[0].trim(); return noHash.replace(/\\/g, '/').split('/').pop().toLowerCase(); }
+
+window.openLoraModal = (mode) => {
+    activeLoraMode = mode;
+    document.getElementById('loraModal').classList.remove('hidden');
+    document.getElementById('loraSearch').value = "";
+    document.getElementById('loraSearch').focus();
+    window.filterLoras();
 }
 
-let activeLoraMode = 'xl';
-window.openLoraModal = (mode) => { 
-    activeLoraMode = mode; 
-    document.getElementById('loraModal').classList.remove('hidden'); 
-    document.getElementById('loraSearch').value = "";
-    document.getElementById('loraSearch').focus(); 
-    window.filterLoras(); 
-}
 window.closeLoraModal = () => document.getElementById('loraModal').classList.add('hidden');
 window.debouncedRenderLora = () => { clearTimeout(loraDebounceTimer); loraDebounceTimer = setTimeout(() => { window.filterLoras(); }, 200); }
 
-// --- REVISED LORA RENDERER (Replaces old filterLoras) ---
 window.filterLoras = () => {
-    // FIX: Fallback to either container ID, and enforce scroll styles
     const list = document.getElementById('loraVerticalList') || document.getElementById('loraGridContainer');
-    // FIX: Enable scrolling via JS in case CSS is missing it
-    list.style.cssText = "overflow-y: auto; flex: 1; min-height: 0; padding-bottom: 20px;"; 
+    list.style.cssText = "overflow-y: auto; flex: 1; min-height: 0; padding-bottom: 20px;";
     list.innerHTML = "";
-
-    const promptId = activeLoraMode === 'xl' ? 'xl_prompt' : 'flux_prompt';
-    const promptEl = document.getElementById(promptId);
-    const currentPromptText = promptEl ? promptEl.value : "";
     const term = document.getElementById('loraSearch').value.toLowerCase();
     
     if(allLoras.length === 0) { list.innerHTML = "<div style='padding:20px;text-align:center;color:#777;'>No LoRAs found</div>"; return; }
     
-    // Sort: Active first, then Alphabetical
     const filtered = allLoras.filter(l => l.name.toLowerCase().includes(term))
                              .sort((a, b) => {
                                  const aActive = isLoraActive(a.name);
@@ -491,62 +917,29 @@ window.filterLoras = () => {
 
     filtered.forEach(lora => {
         const isActive = isLoraActive(lora.name);
-        
-        // Structure
         const row = document.createElement('div');
-        // We reuse class 'lora-item-row' which we defined in new CSS
         row.className = `lora-item-row ${isActive ? 'active' : ''}`;
-        
-        // Thumbnail Logic
-        let thumbUrl = "icon.png"; 
+        let thumbUrl = "icon.png";
         if (lora.path) {
             const base = lora.path.substring(0, lora.path.lastIndexOf('.'));
-            thumbUrl = `${HOST}/file=${base}.png`; 
+            thumbUrl = `${HOST}/file=${base}.png`;
         }
-
-        // HTML Layout
-        row.innerHTML = `
-            <img src="${thumbUrl}" class="lora-item-thumb" loading="lazy" onerror="this.src='icon.png';this.onerror=null;">
-            
-            <div class="lora-item-info">
-                <div class="lora-item-name">${lora.name}</div>
-                <div class="lora-item-meta">${isActive ? 'ACTIVE' : 'READY'}</div>
-            </div>
-            
-            <div class="lora-btn-action" title="Edit Config">
-                <i data-lucide="settings-2" size="20"></i>
-            </div>
-            
-            <div class="lora-btn-toggle">
-                <i data-lucide="${isActive ? 'check' : 'plus'}" size="22"></i>
-            </div>
-        `;
-
-        // Bind Events
+        row.innerHTML = `<img src="${thumbUrl}" class="lora-item-thumb" loading="lazy" onerror="this.src='icon.png';this.onerror=null;"><div class="lora-item-info"><div class="lora-item-name">${lora.name}</div><div class="lora-item-meta">${isActive ? 'ACTIVE' : 'READY'}</div></div><div class="lora-btn-action" title="Edit Config"><i data-lucide="settings-2" size="20"></i></div><div class="lora-btn-toggle"><i data-lucide="${isActive ? 'check' : 'plus'}" size="22"></i></div>`;
+        
         const editBtn = row.querySelector('.lora-btn-action');
-        editBtn.onclick = (e) => { 
-            e.stopPropagation(); 
-            openLoraSettings(e, lora.name, lora.path.replace(/\\/g, '/')); 
-        };
-
+        editBtn.onclick = (e) => { e.stopPropagation(); openLoraSettings(e, lora.name, lora.path.replace(/\\/g, '/')); };
+        
         const toggleBtn = row.querySelector('.lora-btn-toggle');
-        toggleBtn.onclick = (e) => { 
-            e.stopPropagation(); 
-            toggleLora(lora.name, row, lora.path.replace(/\\/g, '/')); 
-        };
-
-        row.onclick = () => {
-             toggleLora(lora.name, row, lora.path.replace(/\\/g, '/')); 
-        };
-
+        toggleBtn.onclick = (e) => { e.stopPropagation(); toggleLora(lora.name, row, lora.path.replace(/\\/g, '/')); };
+        
+        row.onclick = () => { toggleLora(lora.name, row, lora.path.replace(/\\/g, '/')); };
         list.appendChild(row);
     });
     
     if(filtered.length === 0) list.innerHTML = "<div style='padding:20px;text-align:center;color:#666;'>No matches</div>";
-    if(window.lucide) lucide.createIcons();
+    lucide.createIcons();
 }
 
-// --- NEW LORA LOGIC HELPERS ---
 function isLoraActive(loraName) {
     const promptId = activeLoraMode === 'xl' ? 'xl_prompt' : 'flux_prompt';
     const text = document.getElementById(promptId).value;
@@ -556,46 +949,37 @@ function isLoraActive(loraName) {
 window.toggleLora = async (loraName, rowEl, loraPath) => {
     const promptId = activeLoraMode === 'xl' ? 'xl_prompt' : 'flux_prompt';
     const p = document.getElementById(promptId);
-    
     const escapedName = loraName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`<lora:${escapedName}:[^>]+>`, 'g');
     const isRemoving = !!p.value.match(regex);
 
     if (isRemoving) {
-        // REMOVE
         p.value = p.value.replace(regex, '');
-        // Clean triggers from config if present
         const knownConfig = loraConfigs[loraName];
         if(knownConfig && knownConfig.trigger) {
             const trigRegex = new RegExp(knownConfig.trigger.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-            p.value = p.value.replace(trigRegex, ''); 
+            p.value = p.value.replace(trigRegex, '');
         }
         p.value = p.value.replace(/\s\s+/g, ' ').trim();
-        
         rowEl.classList.remove('active');
         rowEl.querySelector('.lora-btn-toggle i').setAttribute('data-lucide', 'plus');
         rowEl.querySelector('.lora-item-meta').innerText = 'READY';
         if(Toast) Toast.show({text: 'Removed', duration: 'short'});
-
     } else {
-        // ADD
         let config = loraConfigs[loraName];
-        if (!config) { 
+        if (!config) {
             if(Toast) Toast.show({text: 'Fetching config...', duration: 'short'});
-            config = await loadSidecarConfig(loraName, loraPath); 
+            config = await loadSidecarConfig(loraName, loraPath);
         }
-
         let insertion = ` <lora:${loraName}:${config.weight}>`;
         if (config.trigger) insertion += ` ${config.trigger}`;
-        
         p.value = p.value.trim() + insertion;
-        
         rowEl.classList.add('active');
         rowEl.querySelector('.lora-btn-toggle i').setAttribute('data-lucide', 'check');
         rowEl.querySelector('.lora-item-meta').innerText = 'ACTIVE';
         if(Toast) Toast.show({text: 'Added', duration: 'short'});
     }
-    if(window.lucide) lucide.createIcons();
+    lucide.createIcons();
 }
 
 window.openLoraSettings = async (e, loraName, loraPath) => {
@@ -621,54 +1005,9 @@ window.openLoraSettings = async (e, loraName, loraPath) => {
         if(Toast) Toast.show({text: 'Saved', duration: 'short'});
     };
 }
+
 window.closeConfigModal = () => document.getElementById('loraConfigModal').classList.add('hidden');
 window.updateWeightDisplay = (val) => document.getElementById('cfgWeightDisplay').innerText = val;
-
-
-let activeLlmMode = 'xl';
-let llmState = { xl: { input: "", output: "" }, flux: { input: "", output: "" } };
-let llmSettings = {
-    baseUrl: 'http://localhost:11434', key: '', model: '',
-    system_xl: `You are a Prompt Generator for Image Generation.
-OBJECTIVE: Convert user concepts into a dense, highly detailed string of comma-separated tags.
-CRITICAL SAFETY LOGIC:
-1. IF the user's input implies SFW content (e.g., "cute girl", "scenery", "portrait", "SFW"):
-   - OUTPUT SAFE TAGS ONLY. Do not include sexual anatomy or acts.
-   - Example SFW Output: masterpiece, best quality, 1girl, solo, hanfu, flower hair ornament, intricate jewelry, holding fan, red lips, serene expression, highly detailed background, cinematic lighting.
-   - Example full prompts:
-   No.1: "asts,cowboy shot,dutch angle,cinematic,fanshion,vibrant color,gradient hair,abstract background,wuthering waves,clock,(quasarcake:0.7),(yoneyama mai,wlop:0.5),zani \(wuthering waves\),gloves, horns, red necktie, black pants, half gloves,collared shirt, jacket,choker,white hair,,wind,head tilt,parted lips,thigh gap,magazine cover,english text,looking at viewer,((mature female)),large breasts,bursting breasts,cowboy shot,dutch angle,cinematic,fanshion,vibrant color,gradient hair,abstract background,wuthering waves,clock,(quasarcake:0.7),(yoneyama mai,wlop:0.5),masterpiece,best quality"
-
-   No-2: "1girl,solo, white hair,very long hair,disheveled hair,messy hair,ahoge,hair between eyes,very long bangs,long sidelocks,long eyelashes,white eyelashes,yellow eyes,ringed eyes,dark silk robe,hair tied with jade hairpin,no crown,plain belt,loose collar,calm,gentle,eyes on paper,smile,sitting at desk,holding brush,writing,grinding ink,leaning close,palace study,bamboo slips,ink stone,calligraphy brush,brush holder,incense burner,folding screen with flower pattern,chinese clothes, candle light,warm yellow tones,soft glow,shallow depth of field,intimate atmosphere\nclose-up,side view,focus on hands and interaction,warm tones,traditional ink painting elements, shadow,movie perspective ,masterpiece,best quality,"
-
-2. IF the user's input implies NSFW content (e.g., "nsfw", "nude", "sex", "orgasm"):
-   - OUTPUT EXPLICIT TAGS. Use detailed anatomical terms (nipples, pussy, clitoris, pussy juice) and specific act tags (fingering, sex from behind, ahegao) without censorship.
-   - Example NSFW Output: masterpiece, best quality, 1girl, nude, nipples, pussy focus, fingering self, ahegao, intense orgasm, squirting, legs spread, messy bed, dynamic angle.
-   - OUTPUT RIGHT NUMBERS: Check the user input for numeric determiner like "a" , "an" , "two", and output as "1boy", "1girl", "1boy, 1girl", "1boy, 2girl" etc.
-   - Example full prompts:
-   No1: "Expressiveh, score_9, score_8_up, score_7_up, (anime:1.2), score_6_up, 1girl, pov,solo, cute, (night:1.6), Spiderman, (Gwen:1.5), (blush), (orgasm expression:1.4), cleavage, medium breasts, girl focus, small hips, small ass, soft lines, soft style, Pin up, (tender colors), young face, Dynamic angle, (in dirty alleyway:1.5), looking up at viewer, doggystyle, on knees, legs wide, ass up, looking back, heavy shadows, (motion lines:1.4), (drunk:1.5), (asleep:1.4), (used condoms:1.3), nude, perfect tiny pussy, (vaginal penetration:1.4), litter, trash, (glow sticks:1.2), passed out, (cum on ground:1.3), spread legs, spread pussy, cum on face, cum in pussy, cum on legs, cum on breasts, cum on arms, cum on ass, cum on shoulders, cum on hands, cum in hair, cum on stomach, cum on body"
-    
-   No2: "score_9, score_8_up, score_7_up, source_anime, rating_explicit BREAK, ((1girl)), solo, looking at you, ((shy smile, blushing)), (mascara, eyeliner), ((sapphire choker)), ((dark grey eyes, black hair ponytail)), ((grasslands backgrounds, meadows with beautiful trees in background)), (massive breasts), ((cowboy shot)), rndLyn,chifuyu orimura, cleavage cutout, ((nipple bulge), (kirin beta armor, white single horn hairband, white detached sleeves, white knee boots, white loincloth, black bandeau), (pussy barely visible behind loincloth, detailed pussy), (cleavage window, side view)"
-    
-    No3: "(source_cartoon:0.7), score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up or score_9, score_8_up, score_7_up, expressiveh,
-    (cinematic lighting:1.2), /,presenting, knees apart, view between legs, spreading anus, tight anus, tight pussy, pussy juice, clitoral hood, pussy lips, feet, foreshortening, looking at viewer, /, (seductive look:1.5), (half-closed eyes), lips parted, steamy breath, /,raven-haired yellow-eyed girl, aroused, turned on, biting lip, happy, blush, bare thighs, Big eyes, shortstack, (dark-skinned female:1.6), (colored skin), (brown skin:1.4), (long hair, shaved, pixie cut), thin eyebrows, yellow eyes, (slim waist;1.2), (wide hips:1.4), (phat pussy), Big huge breasts /,  thighhighs, garter belt, garter straps, long white gloves, /, bedroom, window, medieval fantasy,
-    shiny skin, /, masterpiece, 8k, high detail, clean lines, detailed background, best quality, amazing quality, very aesthetic, high resolution, ultra-detailed, absurdres,
-
-GENERAL RULES:
-- OUTPUT: Provide ONLY the raw prompt text. Do NOT include labels like "For nsfw", "Prompt:", or "Output:" or "Sfw" "Sfw prompts", or "No1." or "No2.".
-- FORMAT: Raw, comma-separated tags only. NO labels, NO natural language sentences.
-- PREFIX: Always start with something like "masterpiece, best quality" for sfw, for nsfw: "masterpiece, best quality, score_9, score_8".
-- OOUTPUT SIZE: 150-200 words approx. First 75 tokens are cruicial, make them count.
-- CONTENT ORDER: Quality -> Subject -> Features -> Outfit/Nudity -> Action -> Background -> Lighting -> Tech.
-- NEGATIVE: Do NOT generate negative prompts.`,
-    system_flux: `You are a Image Prompter.
-OBJECTIVE: Convert user concepts into a detailed, natural language description.
-RULES:
-1. OUTPUT: Provide ONLY the raw prompt text. Do NOT include labels like "Description:", "Prompt:", or "Natural Language:".
-2. FORMAT: Fluid sentences and descriptive phrases. Focus on physical textures, lighting, and camera aesthetics.
-3. TONE: Objective and photographic.
-4. CONTENT: Describe the subject, outfit, and background in high detail.
-5. TEXT: If the user asks for text, use quotation marks.`
-};
 
 window.openLlmModal = (mode) => {
     activeLlmMode = mode;
@@ -686,11 +1025,13 @@ window.openLlmModal = (mode) => {
 window.closeLlmModal = () => document.getElementById('llmModal').classList.add('hidden');
 window.toggleLlmSettings = () => document.getElementById('llmSettingsBox').classList.toggle('hidden');
 window.updateLlmState = function() { llmState[activeLlmMode].input = document.getElementById('llmInput').value; }
+
 function updateLlmButtonState() {
     const hasOutput = llmState[activeLlmMode].output.trim().length > 0;
     const btn = document.getElementById('llmGenerateBtn');
     btn.innerText = hasOutput ? "ITERATE" : "GENERATE PROMPT";
 }
+
 function loadLlmSettings() {
     const s = localStorage.getItem('bojroLlmConfig');
     if(s) {
@@ -705,8 +1046,9 @@ function loadLlmSettings() {
         }
     }
 }
+
 window.saveLlmGlobalSettings = function() {
-    llmSettings.baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, ""); 
+    llmSettings.baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, "");
     llmSettings.key = document.getElementById('llmApiKey').value;
     llmSettings.model = document.getElementById('llmModelSelect').value;
     const sysVal = document.getElementById('llmSystemPrompt').value;
@@ -714,6 +1056,7 @@ window.saveLlmGlobalSettings = function() {
     localStorage.setItem('bojroLlmConfig', JSON.stringify(llmSettings));
     if(Toast) Toast.show({ text: 'Settings & Model Saved', duration: 'short' });
 }
+
 window.connectToLlm = async function() {
     if (!CapacitorHttp) return alert("Native HTTP Plugin not loaded! Rebuild App.");
     const baseUrl = document.getElementById('llmApiBase').value.replace(/\/$/, "");
@@ -736,10 +1079,11 @@ window.connectToLlm = async function() {
             data.data.forEach(m => { select.appendChild(new Option(m.id, m.id)); });
             if(Toast) Toast.show({ text: `Found ${data.data.length} models`, duration: 'short' });
         } else { throw new Error("Invalid model format"); }
-        document.getElementById('llmApiBase').value = baseUrl; 
+        document.getElementById('llmApiBase').value = baseUrl;
         saveLlmGlobalSettings();
     } catch(e) { alert("Link Error: " + (e.message || JSON.stringify(e))); } finally { btn.innerText = originalText; btn.disabled = false; }
 }
+
 window.generateLlmPrompt = async function() {
     if (!CapacitorHttp) return alert("Native HTTP Plugin not loaded!");
     const btn = document.getElementById('llmGenerateBtn');
@@ -768,6 +1112,7 @@ window.generateLlmPrompt = async function() {
         if(Toast) Toast.show({ text: 'Prompt Generated!', duration: 'short' });
     } catch(e) { alert("Generation failed: " + (e.message || JSON.stringify(e))); } finally { btn.disabled = false; updateLlmButtonState(); }
 }
+
 window.useLlmPrompt = function() {
     const result = document.getElementById('llmOutput').value;
     if(!result) return alert("Generate a prompt first!");
@@ -777,23 +1122,104 @@ window.useLlmPrompt = function() {
     if(Toast) Toast.show({ text: 'Applied to main prompt!', duration: 'short' });
 }
 
-function buildJobFromUI() {
-    const mode = currentMode; 
-    const targetModelTitle = mode === 'xl' ? document.getElementById('xl_modelSelect').value : document.getElementById('flux_modelSelect').value;
-    if(!targetModelTitle || targetModelTitle === "Link first...") return null;
+// -----------------------------------------------------------
+// JOB BUILDER & INPAINTING
+// -----------------------------------------------------------
 
+function buildJobFromUI() {
     let payload = {};
     let overrides = {};
     overrides["forge_inference_memory"] = getVramMapping();
     overrides["forge_unet_storage_dtype"] = "Automatic (fp16 LoRA)";
-    let prompt = "";
+    
+    // If Inpainting, read from new controls
+    if (currentTask === 'inp') {
+        const model = document.getElementById('inp_modelSelect').value;
+        const prompt = document.getElementById('inp_prompt').value;
+        if (!model || model.includes('Loading')) return alert("Select Model");
+        
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": document.getElementById('inp_neg').value,
+            "steps": parseInt(document.getElementById('inp_steps').value),
+            "cfg_scale": parseFloat(document.getElementById('inp_cfg').value),
+            // Resize to editor crop resolution
+            "width": editorTargetW,
+            "height": editorTargetH,
+            "sampler_name": document.getElementById('inp_sampler').value,
+            "scheduler": document.getElementById('inp_scheduler').value,
+            "batch_size": 1, 
+            "n_iter": 1,
+            "save_images": true,
+            "mask_blur": parseInt(document.getElementById('inp_mask_blur').value) || 4 //
+        };
+
+        if (!sourceImageB64) { alert("Image missing!"); return null; }
+        
+        // init_images must be a list
+        payload.init_images = [sourceImageB64.split(',')[1]];
+        payload.denoising_strength = parseFloat(document.getElementById('denoisingStrength').value);
+        payload.resize_mode = 0; 
+
+        if (maskCanvas) {
+             const cleanMask = maskCanvas.toDataURL().split(',')[1];
+             payload.mask = cleanMask;
+             payload.inpainting_mask_invert = 0;
+             
+             // explicitly set inpainting_fill to 1 (Original) as default logic
+             payload.inpainting_fill = 1; 
+
+             if (currentInpaintMode === 'mask') {
+                 // Masked Only Mode
+                 payload.inpaint_full_res = true; 
+                 payload.inpaint_full_res_padding = 32;
+             } else {
+                 // Whole Picture Mode
+                 payload.inpaint_full_res = false; 
+             }
+        }
+        
+        // Soft Inpainting Logic 
+        const useSoftInpaint = document.getElementById('inp_soft_inpaint').checked;
+        if (useSoftInpaint) {
+             payload.alwayson_scripts = {
+                 "soft inpainting": {
+                     "args": [
+                         true,  // Enabled
+                         1.0,   // Schedule Bias
+                         0.5,   // Preservation Strength
+                         4.0,   // Transition Contrast Boost
+                         0.0,   // Mask Influence
+                         0.5,   // Difference Threshold
+                         2.0    // Difference Contrast
+                     ]
+                 }
+             };
+             // Recommendation: Increase mask blur slightly for soft inpainting
+             if(payload.mask_blur < 8) payload.mask_blur = 8;
+        }
+
+        // Use Model Override logic for generic Inpaint
+        // AND CRITICALLY: Unload any Flux/SDXL modules that might be lingering
+        overrides["sd_model_checkpoint"] = model;
+        overrides["forge_additional_modules"] = []; // FORCE CLEAR
+        overrides["sd_vae"] = "Automatic";          // RESET VAE
+        
+        payload.override_settings = overrides;
+
+        return { mode: 'inp', modelTitle: model, payload: payload, desc: `Inpaint: ${prompt.substring(0,20)}...` };
+    }
+
+    // Existing XL / Flux Logic
+    const mode = currentMode; 
+    const targetModelTitle = mode === 'xl' ? document.getElementById('xl_modelSelect').value : document.getElementById('flux_modelSelect').value;
+    if(!targetModelTitle || targetModelTitle.includes("Link first")) return null;
     
     if(mode === 'xl') {
         overrides["forge_additional_modules"] = [];
         overrides["sd_vae"] = "Automatic";
-        prompt = document.getElementById('xl_prompt').value;
         payload = {
-            "prompt": prompt, "negative_prompt": document.getElementById('xl_neg').value,
+            "prompt": document.getElementById('xl_prompt').value, "negative_prompt": document.getElementById('xl_neg').value,
             "steps": parseInt(document.getElementById('xl_steps').value), "cfg_scale": parseFloat(document.getElementById('xl_cfg').value),
             "width": parseInt(document.getElementById('xl_width').value), "height": parseInt(document.getElementById('xl_height').value),
             "batch_size": parseInt(document.getElementById('xl_batch_size').value), "n_iter": parseInt(document.getElementById('xl_batch_count').value),
@@ -806,9 +1232,8 @@ function buildJobFromUI() {
         const bits = document.getElementById('flux_bits').value;
         if(bits) overrides["forge_unet_storage_dtype"] = bits;
         const distCfg = parseFloat(document.getElementById('flux_distilled').value);
-        prompt = document.getElementById('flux_prompt').value;
         payload = {
-            "prompt": prompt, "negative_prompt": "",
+            "prompt": document.getElementById('flux_prompt').value, "negative_prompt": "",
             "steps": parseInt(document.getElementById('flux_steps').value), "cfg_scale": parseFloat(document.getElementById('flux_cfg').value),
             "distilled_cfg_scale": isNaN(distCfg) ? 3.5 : distCfg, 
             "width": parseInt(document.getElementById('flux_width').value), "height": parseInt(document.getElementById('flux_height').value),
@@ -817,7 +1242,7 @@ function buildJobFromUI() {
             "seed": parseInt(document.getElementById('flux_seed').value), "save_images": true, "override_settings": overrides 
         };
     }
-    return { mode: mode, modelTitle: targetModelTitle, payload: payload, desc: `${prompt.substring(0, 30)}...` };
+    return { mode: mode, modelTitle: targetModelTitle, payload: payload, desc: `${payload.prompt.substring(0, 30)}...` };
 }
 
 window.addToQueue = function() {
@@ -952,19 +1377,36 @@ window.generate = async function() {
 window.clearGenResults = function() { document.getElementById('gallery').innerHTML = ''; }
 
 async function runJob(job, isBatch = false) {
-    const btn = document.getElementById('genBtn'); 
+    const btnId = currentTask === 'inp' ? 'inpGenBtn' : 'genBtn';
+    const btn = document.getElementById(btnId);
     const spinner = document.getElementById('loadingSpinner');
     btn.disabled = true; spinner.style.display = 'block';
 
     try {
         let isReady = false; let attempts = 0;
+        // Check if model is loaded. Logic:
+        // 1. Get Options.
+        // 2. Normalize Names.
+        // 3. If mismatch, POST options.
         while (!isReady && attempts < 40) { 
             const optsReq = await fetch(`${HOST}/sdapi/v1/options`, { headers: getHeaders() });
             const opts = await optsReq.json();
+            
+            // Normalize: lowercase, remove hash, remove path
             if (normalize(opts.sd_model_checkpoint) === normalize(job.modelTitle)) { isReady = true; break; }
+            
             if (attempts % 5 === 0) { 
                 btn.innerText = `ALIGNING... (${attempts})`;
-                await postOption({ "sd_model_checkpoint": job.modelTitle, "forge_unet_storage_dtype": "Automatic (fp16 LoRA)" });
+                // Force overrides here as well to ensure alignment
+                const loadPayload = { "sd_model_checkpoint": job.modelTitle, "forge_unet_storage_dtype": "Automatic (fp16 LoRA)" };
+                
+                // CRITICAL FIX: If Inpainting, ensure we clear flux modules during alignment too
+                if(job.mode === 'inp') {
+                    loadPayload["forge_additional_modules"] = [];
+                    loadPayload["sd_vae"] = "Automatic";
+                }
+                
+                await postOption(loadPayload);
             }
             attempts++; await new Promise(r => setTimeout(r, 1500));
         }
@@ -979,14 +1421,12 @@ async function runJob(job, isBatch = false) {
             try {
                 const res = await fetch(`${HOST}/sdapi/v1/progress`, { headers: getHeaders() });
                 const data = await res.json();
-                
                 if (data.state && data.state.sampling_steps > 0) {
                     const currentJobIndex = data.state.job_no || 0; 
                     const currentStepInBatch = data.state.sampling_step;
                     const jobStep = (currentJobIndex * job.payload.steps) + currentStepInBatch;
                     btn.innerText = `Step ${jobStep}/${jobTotalSteps}`;
                     const msg = `Step ${jobStep} / ${jobTotalSteps}`;
-                    
                     if(isBatch) {
                         const actualTotal = currentBatchProgress + jobStep;
                         document.getElementById('queueProgressText').innerText = `Step ${actualTotal} / ${totalBatchSteps}`;
@@ -1000,10 +1440,7 @@ async function runJob(job, isBatch = false) {
             } catch(e) {}
         }, 1000);
 
-        const endpoint = '/sdapi/v1/txt2img'; 
-        // Note: Task based routing was in broken version, working version only had txt2img in buildJob
-        // But let's assume it supports both if payload suggests. 
-        // For safety based on "working code provided":
+        const endpoint = job.mode === 'inp' ? '/sdapi/v1/img2img' : '/sdapi/v1/txt2img'; 
         const res = await fetch(`${HOST}${endpoint}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(job.payload) });
         
         clearInterval(progressInterval); 
@@ -1029,10 +1466,12 @@ async function runJob(job, isBatch = false) {
             }
         }
     } catch(e) { throw e; } finally {
-        spinner.style.display = 'none'; btn.disabled = false; btn.innerText = currentMode === 'xl' ? "GENERATE" : "QUANTUM GENERATE";
+        spinner.style.display = 'none'; btn.disabled = false; 
+        if(currentTask === 'inp') { btn.innerText = "GENERATE"; } else { btn.innerText = currentMode === 'xl' ? "GENERATE" : "QUANTUM GENERATE"; }
     }
 }
 
+// ... [Keep existing Gallery/Analysis Logic] ...
 function loadGallery() {
     const grid = document.getElementById('savedGalleryGrid'); grid.innerHTML = "";
     if(!db) return;
@@ -1068,7 +1507,9 @@ function loadGallery() {
         lucide.createIcons();
     }
 }
+
 window.changeGalleryPage = function(dir) { galleryPage += dir; loadGallery(); }
+
 window.toggleGallerySelectionMode = function() {
     isSelectionMode = !isSelectionMode;
     const btn = document.getElementById('galSelectBtn');
@@ -1076,13 +1517,16 @@ window.toggleGallerySelectionMode = function() {
     if(isSelectionMode) { btn.style.background = "var(--accent-primary)"; btn.style.color = "white"; delBtn.classList.remove('hidden'); }
     else { btn.style.background = "var(--input-bg)"; btn.style.color = "var(--text-main)"; delBtn.classList.add('hidden'); selectedImageIds.clear(); document.querySelectorAll('.gal-tick').forEach(t => t.classList.add('hidden')); updateDeleteBtn(); }
 }
+
 function toggleSelectionForId(id, container) {
     const tick = container.querySelector('.gal-tick');
     if(selectedImageIds.has(id)) { selectedImageIds.delete(id); tick.classList.add('hidden'); }
     else { selectedImageIds.add(id); tick.classList.remove('hidden'); }
     updateDeleteBtn();
 }
+
 function updateDeleteBtn() { document.getElementById('galDeleteBtn').innerText = `DELETE (${selectedImageIds.size})`; }
+
 window.deleteSelectedImages = function() {
     if(selectedImageIds.size === 0) return;
     if(!confirm(`Delete ${selectedImageIds.size} images?`)) return;

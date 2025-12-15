@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="style.css">
     
     <style>
+        /* Keep existing inline styles for Queue */
         .queue-section { margin-bottom: 20px; }
         .queue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--input-border); }
         .queue-label { font-size: 12px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
@@ -233,6 +234,106 @@
             <div id="metaData" class="glass-box hidden" style="font-family: monospace; font-size: 10px; color: var(--text-muted);"></div>
         </div>
 
+        <div id="view-inp" class="hidden" style="height: 100%; display: flex; flex-direction: column;">
+            
+            <div id="img-input-container" style="flex:1; display:flex; justify-content:center; align-items:center; width: 100%;">
+                <label for="inpUpload" style="width:80%; max-width:300px;">
+                    <div id="inpUploadBox" style="border: 2px dashed var(--accent-primary); padding: 40px 20px; border-radius: 12px; background: rgba(var(--accent-primary-rgb), 0.05); text-align: center; cursor: pointer; transition: 0.2s;">
+                        <i data-lucide="image-plus" size="48" style="margin-bottom:15px; color:var(--accent-primary);"></i>
+                        <div style="font-weight:900; color:var(--text-main); font-size:16px;">UPLOAD IMAGE</div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">Tap to open editor</div>
+                    </div>
+                </label>
+                <input type="file" id="inpUpload" accept="image/*" class="hidden" onchange="openEditorFromFile(event)">
+            </div>
+
+            <div id="canvasWrapper" class="hidden" style="flex:1; display:flex; flex-direction:column; gap:10px;">
+                <div style="position:relative; width:100%; border:1px solid var(--border-color); border-radius:8px; overflow:hidden; background:#000;">
+                    <canvas id="paintCanvas" style="display:block; width:100%; touch-action:none;"></canvas>
+                    <div style="position:absolute; top:10px; right:10px; display:flex; gap:5px;">
+                        <button onclick="undoLastStroke()" class="btn-icon glass-icon"><i data-lucide="undo-2"></i></button>
+                        <button onclick="clearMask()" class="btn-icon glass-icon" style="color:#f44336;"><i data-lucide="trash"></i></button>
+                    </div>
+                </div>
+
+                <div id="inpaintControls" class="glass-box">
+                    <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+                        <label>Tool</label>
+                        <div class="row" style="width:auto; gap:5px;">
+                            <div class="toggle-opt active" id="tool-draw" onclick="setBrushMode('draw')">DRAW</div>
+                            <div class="toggle-opt" id="tool-erase" onclick="setBrushMode('erase')">ERASE</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <label>Brush Size</label>
+                        <input type="range" id="brushSize" min="5" max="100" value="40" class="orange-slider">
+                    </div>
+
+                    <div class="col" style="margin-top:15px; border-top:1px solid var(--border-color); padding-top:10px;">
+                        <label><i data-lucide="cpu" size="12"></i> Model</label>
+                        <div class="row">
+                            <select id="inp_modelSelect" onchange="saveSelection('inp')"><option>Loading...</option></select>
+                            <button onclick="document.getElementById('inp_modelSelect').value = localStorage.getItem('bojroModel_inp')" class="btn-icon"><i data-lucide="save" size="14"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="col" style="margin-top:10px;">
+                        <label><i data-lucide="sparkles" size="12"></i> Prompt</label>
+                        <textarea id="inp_prompt" rows="2" placeholder="Describe changes...">original</textarea>
+                        <label><i data-lucide="shield-off" size="12"></i> Negative</label>
+                        <textarea id="inp_neg" rows="1" style="min-height:35px;">bad quality, blur</textarea>
+                    </div>
+
+                    <div class="row" style="margin-top:10px;">
+                        <div class="col"><label>Sampler</label><select id="inp_sampler"><option>Euler a</option></select></div>
+                        <div class="col"><label>Schedule</label><select id="inp_scheduler"><option>Karras</option></select></div>
+                    </div>
+
+                    <div class="row" style="margin-top:10px;">
+                        <div class="col"><label>Steps</label><input type="number" id="inp_steps" value="20"></div>
+                        <div class="col"><label>CFG</label><input type="number" id="inp_cfg" value="7"></div>
+                    </div>
+
+                    <div class="col" style="margin-top:10px;">
+                        <label>Denoising (0.0-1.0)</label>
+                        <div class="row">
+                            <input type="range" id="denoisingStrength" min="0" max="1" step="0.05" value="0.75" class="orange-slider" oninput="document.getElementById('denoiseVal').innerText = this.value">
+                            <span id="denoiseVal" style="font-family:monospace; color:var(--accent-primary);">0.75</span>
+                        </div>
+                    </div>
+
+                    <div class="col" style="margin-top:10px;">
+                         <div class="row" style="justify-content:space-between;">
+                             <label>Mask Blur (0-64)</label>
+                             <span id="blurVal" style="font-family:monospace; color:var(--text-muted); font-size:10px;">4</span>
+                         </div>
+                         <input type="range" id="inp_mask_blur" min="0" max="64" step="1" value="4" class="orange-slider" oninput="document.getElementById('blurVal').innerText = this.value">
+                    </div>
+
+                    <div class="row" style="margin-top:10px; justify-content:space-between; align-items: center;">
+                        <div class="col">
+                            <label>Mask Mode</label>
+                            <div class="row" style="width:auto; gap:5px;">
+                                <div class="toggle-opt active" id="mode-fill" onclick="setInpaintMode('fill')">WHOLE</div>
+                                <div class="toggle-opt" id="mode-mask" onclick="setInpaintMode('mask')">MASKED</div>
+                            </div>
+                        </div>
+                        <div class="col" style="flex:0; margin-left:10px;">
+                             <label style="white-space:nowrap;">Soft Inpaint</label>
+                             <div class="row" style="justify-content:flex-end;">
+                                <input type="checkbox" id="inp_soft_inpaint" style="width:20px; height:20px;">
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row" style="margin-bottom: 20px;">
+                    <button class="btn-secondary" onclick="document.getElementById('inpUpload').click()" style="flex:1;">NEW IMG</button>
+                    <button id="inpGenBtn" onclick="generate()" class="btn-small" style="flex:2; background: var(--accent-gradient); color:white; height:44px; font-size:14px;">GENERATE</button>
+                </div>
+            </div>
+        </div>
+
         <div id="view-que" class="hidden">
             <div id="queueProgressBox" class="glass-box hidden" style="padding: 10px; margin-bottom: 10px;">
                 <div class="row" style="justify-content: space-between;">
@@ -313,6 +414,51 @@
                     <button onclick="copyToSdxl()" class="btn-small" style="background: var(--accent-gradient); color:white;">USE IN SDXL</button>
                     <button onclick="copyToFlux()" class="btn-small" style="background: var(--glass-panel); border:1px solid var(--accent-primary); color:var(--accent-primary);">USE IN FLUX</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="editorModal" class="modal hidden" style="z-index: 300;">
+        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background:#000; display:flex; flex-direction:column;">
+            <div style="padding:15px; display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.5); z-index:10;">
+                <h3 style="margin:0; color:#fff;">CROP & EDIT</h3>
+                <button onclick="closeEditor()" class="btn-small" style="background:#333;">CANCEL</button>
+            </div>
+            
+            <div id="editorViewport" style="flex:1; position:relative; overflow:hidden; touch-action:none;">
+                <canvas id="editorCanvas" style="position:absolute; top:0; left:0; transform-origin: top left;"></canvas>
+            </div>
+            
+            <div style="padding:20px; background:#111; z-index:10; display:flex; flex-direction:column; gap:15px; max-height:45%; overflow-y:auto;">
+                <label style="color:#777; font-size:10px;">1MP Presets</label>
+                <div class="row" style="flex-wrap:wrap; justify-content:center;">
+                    <button class="btn-small" onclick="setEditorRatio(1024,1024)">1:1</button>
+                    <button class="btn-small" onclick="setEditorRatio(896,1152)">3:4</button>
+                    <button class="btn-small" onclick="setEditorRatio(1152,896)">4:3</button>
+                    <button class="btn-small" onclick="setEditorRatio(832,1216)">9:16</button>
+                    <button class="btn-small" onclick="setEditorRatio(1216,832)">16:9</button>
+                </div>
+                
+                <label style="color:#777; font-size:10px; margin-top:5px;">2MP Presets</label>
+                <div class="row" style="flex-wrap:wrap; justify-content:center;">
+                    <button class="btn-small" onclick="setEditorRatio(1440,1440)">1:1</button>
+                    <button class="btn-small" onclick="setEditorRatio(1088,1920)">9:16</button>
+                    <button class="btn-small" onclick="setEditorRatio(1920,1088)">16:9</button>
+                </div>
+
+                <div class="row" style="margin-top:10px;">
+                    <label style="color:#fff; width:50px;">Scale</label>
+                    <input type="range" id="editScale" min="0.1" max="5" step="0.05" oninput="updateEditorTransform()" class="orange-slider">
+                </div>
+                <div class="row">
+                    <label style="color:#fff; width:50px;">X</label>
+                    <input type="range" id="editX" min="-1000" max="1000" oninput="updateEditorTransform()" class="orange-slider">
+                </div>
+                <div class="row">
+                    <label style="color:#fff; width:50px;">Y</label>
+                    <input type="range" id="editY" min="-1000" max="1000" oninput="updateEditorTransform()" class="orange-slider">
+                </div>
+                <button onclick="applyEditorChanges()" class="btn-small" style="background:var(--accent-gradient); color:white; height:44px; margin-top:10px;">PROCEED</button>
             </div>
         </div>
     </div>
@@ -408,6 +554,7 @@
     <div class="dock-wrapper">
         <div class="glass-dock">
             <div class="dock-item active" onclick="switchTab('gen')"><i data-lucide="zap"></i><span>GEN</span></div>
+            <div class="dock-item" onclick="switchTab('inp')"><i data-lucide="brush"></i><span>INP</span></div>
             <div class="dock-item" onclick="switchTab('que')">
                 <div style="position: relative;">
                     <i data-lucide="layers"></i>
