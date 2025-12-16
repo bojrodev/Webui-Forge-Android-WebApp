@@ -84,6 +84,7 @@ window.onload = function() {
         setupBackgroundListeners();
         createNotificationChannel(); 
         loadLlmSettings(); 
+        loadPowerSettings(); // <--- NEW: Initialize Power Button Settings
         
         // Init Inpainting Systems
         initMainCanvas(); 
@@ -1615,4 +1616,83 @@ async function readPngMetadata(blob) {
         metadata = metadata.replace(/^parameters\0/, '');
         return metadata;
     } catch (e) { console.error("Metadata read error:", e); return null; }
+}
+
+
+// -----------------------------------------------------------
+// 13. BOJRO POWER BUTTON LOGIC
+// -----------------------------------------------------------
+
+function loadPowerSettings() {
+    const savedIP = localStorage.getItem('bojro_power_ip');
+    if (savedIP) {
+        document.getElementById('power-server-ip').value = savedIP;
+    }
+}
+
+window.togglePowerSettings = function() {
+    const modal = document.getElementById('powerSettingsModal');
+    modal.classList.toggle('hidden');
+}
+
+window.savePowerSettings = function() {
+    const ipInput = document.getElementById('power-server-ip').value.trim();
+    
+    if (ipInput) {
+        // Ensure protocol exists (http://)
+        let formattedIP = ipInput;
+        if (!formattedIP.startsWith('http')) {
+            formattedIP = 'http://' + formattedIP;
+        }
+        
+        // Remove trailing slash if present
+        if (formattedIP.endsWith('/')) {
+            formattedIP = formattedIP.slice(0, -1);
+        }
+
+        localStorage.setItem('bojro_power_ip', formattedIP);
+        togglePowerSettings();
+        if(Toast) Toast.show({text: 'Power Config Saved', duration: 'short'});
+    } else {
+        alert("Please enter a valid IP address.");
+    }
+}
+
+window.sendPowerSignal = async function() {
+    const btn = document.getElementById('power-btn-mini');
+    const serverUrl = localStorage.getItem('bojro_power_ip');
+
+    if (!serverUrl) {
+        alert("Please set the PC Server IP in settings first!");
+        togglePowerSettings();
+        return;
+    }
+
+    // Visual Feedback
+    btn.classList.add('active');
+    if(Toast) Toast.show({text: 'Sending Wake Signal...', duration: 'short'});
+
+    try {
+        // Add /power endpoint to the saved base URL
+        const targetUrl = `${serverUrl}/power`;
+        
+        // Use 'no-cors' mode
+        await fetch(targetUrl, {
+            method: 'POST',
+            mode: 'no-cors' 
+        });
+
+        // Feedback
+        if(Toast) Toast.show({text: 'Signal Sent! Starting Services...', duration: 'long'});
+        
+        // Keep button active for a moment
+        setTimeout(() => {
+            btn.classList.remove('active');
+        }, 3000);
+
+    } catch (error) {
+        console.error(error);
+        if(Toast) Toast.show({text: 'Error: Could not reach PC.', duration: 'short'});
+        btn.classList.remove('active');
+    }
 }

@@ -27,6 +27,35 @@
         .q-handle { color: var(--text-muted); margin-right: 10px; cursor: grab; }
         .q-details { flex: 1; }
         .q-meta { font-size: 10px; color: var(--text-muted); }
+
+        /* Power Button Specific Inline Override for small scale integration */
+        #power-btn-mini {
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%; 
+            border: none;
+            background: radial-gradient(circle, #2a2a2a, #1a1a1a);
+            box-shadow: 0 0 5px rgba(0,0,0,0.5), inset 0 0 2px rgba(255,255,255,0.05);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #power-btn-mini .power-icon {
+            font-size: 18px;
+            color: #444;
+            transition: color 0.3s ease, text-shadow 0.3s ease;
+        }
+        #power-btn-mini.active {
+            transform: scale(0.95);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+        }
+        #power-btn-mini.active .power-icon {
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+        }
     </style>
 </head>
 <body>
@@ -51,7 +80,20 @@
                         <div id="statusDot" class="indicator"></div>
                     </div>
                 </div>
-                <div class="row" style="border-top: 1px solid var(--input-border); padding-top: 10px;">
+
+                <div class="row" style="border-top: 1px solid var(--input-border); border-bottom: 1px solid var(--input-border); padding: 10px 0; margin: 10px 0; justify-content: space-between;">
+                    <label style="margin: 0; color: var(--accent-primary); font-weight: 900;">Use Bojro Dev Power On</label>
+                    <div class="row" style="width: auto; gap: 12px;">
+                        <button id="power-btn-mini" onclick="sendPowerSignal()">
+                            <div class="power-icon">⏻</div>
+                        </button>
+                        <button onclick="togglePowerSettings()" class="btn-icon" style="width: 32px; height: 32px;">
+                            <i data-lucide="settings-2" size="16"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row" style="padding-top: 5px;">
                     <div class="col">
                         <label><i data-lucide="memory-stick" size="12"></i> VRAM Profile</label>
                         <select id="vramProfile" style="padding: 8px; font-size: 11px;">
@@ -473,6 +515,22 @@
             <div class="modal-header"><h3>Select LoRA</h3><button onclick="closeLoraModal()" class="close-btn">×</button></div>
             <input type="text" id="loraSearch" placeholder="Search..." onkeyup="filterLoras()">
             <div id="loraVerticalList"></div>
+        </div>
+    </div>
+
+    <div id="powerSettingsModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 300px;">
+            <div class="modal-header">
+                <h3>Power Config</h3>
+                <button onclick="togglePowerSettings()" class="close-btn">×</button>
+            </div>
+            <div class="col">
+                <label for="power-server-ip">PC Server Address:</label>
+                <input type="text" id="power-server-ip" placeholder="http://192.168.x.x:5000">
+                <p style="font-size: 10px; color: var(--text-muted); margin-top: 5px;">Enter the URL shown on your PC app.</p>
+                
+                <button class="btn-small" onclick="savePowerSettings()" style="background: var(--accent-gradient); color: white; margin-top: 15px; height: 40px; font-size: 12px;">SAVE & CLOSE</button>
+            </div>
         </div>
     </div>
 

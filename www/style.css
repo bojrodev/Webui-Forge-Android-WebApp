@@ -876,3 +876,57 @@ input[readonly], textarea[readonly] {
     display: none;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* =========================================
+   12. BOJRO POWER BUTTON INTEGRATION
+   ========================================= */
+
+#power-btn-mini {
+    width: 44px; /* Matches btn-icon size */
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: var(--btn-bg); /* Match app button bg */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3); /* Slight depth */
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
+    margin: 0 auto;
+}
+
+#power-btn-mini .power-icon {
+    font-size: 20px;
+    color: var(--text-muted); /* Default off color */
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+    z-index: 2;
+}
+
+/* Active State (ON / Sending) */
+#power-btn-mini:active, #power-btn-mini.active {
+    transform: scale(0.95);
+    background: rgba(0, 230, 118, 0.1); /* Subtle green tint bg */
+    border-color: var(--success);
+    box-shadow: 0 0 15px rgba(0, 230, 118, 0.3); /* Green glow */
+}
+
+#power-btn-mini:active .power-icon, #power-btn-mini.active .power-icon {
+    color: var(--success); /* #00e676 */
+    text-shadow: 0 0 10px var(--success);
+}
+
+/* Pulse Animation for Active State */
+@keyframes power-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(0, 230, 118, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+}
+
+#power-btn-mini.active {
+    animation: power-pulse 2s infinite;
+}
