@@ -586,27 +586,23 @@ window.editCurrentFs = function() {
 
     // 3. Load the image directly into the Editor
     const img = new Image();
-    img.crossOrigin = "Anonymous"; // Helpful if handling CORS images
+    img.crossOrigin = "Anonymous"; 
     img.src = src;
     
     img.onload = () => {
-        // Set global editor image (defined in globals.js)
         editorImage = img;
 
         // Open the Editor Modal
         document.getElementById('editorModal').classList.remove('hidden');
 
-        // Hide the upload prompt, show the editor canvas container
-        document.getElementById('img-input-container').style.display = 'none';
+        // REMOVED: document.getElementById('img-input-container').style.display = 'none';
+        // We leave the upload box visible behind the modal. 
+        // It will only be hidden when you click "PROCEED" (handled by applyEditorChanges).
         
-        // Trigger Layout Recalculation (defined in editor.js)
-        // We use a small timeout to ensure the modal is rendered first
         setTimeout(() => {
-            // Reset to defaults or current settings
             editorTargetW = parseInt(document.getElementById('xl_width').value) || 1024;
             editorTargetH = parseInt(document.getElementById('xl_height').value) || 1024;
             
-            // Call editor.js functions
             if (typeof recalcEditorLayout === 'function') recalcEditorLayout();
             if (typeof resetEditorView === 'function') resetEditorView();
         }, 50);
@@ -616,7 +612,6 @@ window.editCurrentFs = function() {
         alert("Failed to load image for editing.");
     };
 }
-
 // -----------------------------------------------------------
 // FULLSCREEN LIGHTBOX & ANALYSIS
 // -----------------------------------------------------------
