@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/License-GPLv3-red.svg)
 
 **Resolver** is the ultimate **native Android interface** for [Stable Diffusion WebUI Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo).
-**Resolver** is also very much compatible ** with [Stable Diffusion WebUI Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge).
+**Resolver** is also very much compatible** with [Stable Diffusion WebUI Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge).
 
 Unlike standard browser wrappers, Resolver utilizes **Native Android Foreground Services** and Wake Locks. This ensures your image generation queue continues processing background tasks (batch generations, huge Flux GGUF workflows) even when your phone screen is off or the app is minimized.
 
