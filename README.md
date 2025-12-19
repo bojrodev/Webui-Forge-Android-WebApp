@@ -6,7 +6,6 @@
 ![License](https://img.shields.io/badge/License-GPLv3-red.svg)
 
 **Resolver** is the ultimate **native Android interface** for [Stable Diffusion WebUI Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo).
-**Resolver** is also very much **compatible** with [Stable Diffusion WebUI Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge).
 
 Unlike standard browser wrappers, Resolver utilizes **Native Android Foreground Services** and Wake Locks. This ensures your image generation queue continues processing background tasks (batch generations, huge Flux GGUF workflows) even when your phone screen is off or the app is minimized.
 
@@ -42,18 +41,30 @@ Unlike standard browser wrappers, Resolver utilizes **Native Android Foreground 
 
 ## 📸 Screenshots
 
-| **Home/SDXL** | **Flux UI** | **LoRA Manager** |
-|:---:|:---:|:---:|
-| ![Home UI Placeholder](<img width="415" height="960" alt="Home" src="https://github.com/user-attachments/assets/73bc7ab2-47ea-4598-9757-c86be9ad03c7" />
-) | ![Flux UI Placeholder](<img width="403" height="955" alt="Flux" src="https://github.com/user-attachments/assets/e132a4d3-e33a-479f-af4a-566bd81b04a5" />
-) | ![LoRA Manager Placeholder](<img width="395" height="968" alt="Lora" src="https://github.com/user-attachments/assets/4147b392-b351-4e70-8716-38c4c2e7cc30" />
-) |
-
-| **Inpainting Canvas** | **Qwen / Turbo Mode** | **Magic Prompt (LLM)** |
-|:---:|:---:|:---:|
-| ![Inpaint Placeholder](<img width="413" height="974" alt="inpainting" src="https://github.com/user-attachments/assets/b489e035-32e3-4392-87b8-fbcfde706134" />
-) | ![Qwen UI Placeholder](<img width="412" height="958" alt="Qwen" src="https://github.com/user-attachments/assets/38ab45ce-663c-4b45-91e8-ba77be3f67d9" />
-) | ![LLM Placeholder](https://placehold.co/250x500?text=Magic+Prompt) |
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/73bc7ab2-47ea-4598-9757-c86be9ad03c7" width="200" /><br />
+      <b>Home / SDXL</b>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/e132a4d3-e33a-479f-af4a-566bd81b04a5" width="200" /><br />
+      <b>Flux UI</b>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/4147b392-b351-4e70-8716-38c4c2e7cc30" width="200" /><br />
+      <b>LoRA Manager</b>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/b489e035-32e3-4392-87b8-fbcfde706134" width="200" /><br />
+      <b>Inpainting</b>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/38ab45ce-663c-4b45-91e8-ba77be3f67d9" width="200" /><br />
+      <b>Qwen Turbo</b>
+    </td>
+  </tr>
+</table>
 
 ---
 
