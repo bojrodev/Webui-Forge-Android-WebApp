@@ -246,9 +246,11 @@ window.LoraManager = {
             
             container.insertBefore(row, trigger);
             
-            // Trigger Smart Load
+            // Trigger Smart Load - DEFERRED to unblock UI
             const imgEl = row.querySelector('.lora-item-thumb');
-            this.smartLoadThumbnail(imgEl, lora);
+            setTimeout(() => {
+                this.smartLoadThumbnail(imgEl, lora);
+            }, 50);
         });
 
         this.displayedCount += batch.length;
