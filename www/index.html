@@ -702,6 +702,16 @@
                     <textarea id="llmSystemPrompt" rows="4"></textarea>
                 </div>
 
+                <div class="row" style="justify-content: space-between; align-items: center; margin: 5px 0 5px 0; padding: 0 5px;">
+                    <div class="row" style="width: auto; gap: 8px;">
+                        <input type="checkbox" id="llmPersistentCheck" onchange="toggleLlmPersistent()" style="width: 16px; height: 16px;">
+                        <label for="llmPersistentCheck" style="margin: 0; font-size: 11px; color: var(--text-main); font-weight: bold;">Persistent Chat</label>
+                    </div>
+                    <button id="llmResetBtn" onclick="resetLlmHistory()" class="btn-small hidden" style="width: auto; padding: 4px 8px; font-size: 10px; background: rgba(244, 67, 54, 0.1); color: #f44336; border-color: rgba(244, 67, 54, 0.3);">
+                        <i data-lucide="refresh-cw" size="10" style="margin-right:4px;"></i>RESET CHAT
+                    </button>
+                </div>
+
                 <div id="llmSettingsBox" class="glass-box hidden" style="padding: 10px; background: rgba(0,0,0,0.3); margin-top:10px;">
                     <label style="color: var(--accent-primary);">LLM Configuration</label>
                     <div class="col" style="margin-top:5px; gap:8px;">

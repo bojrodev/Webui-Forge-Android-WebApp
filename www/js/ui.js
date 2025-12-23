@@ -306,16 +306,31 @@ window.savePowerSettings = function() {
 window.openLlmModal = (mode) => {
     activeLlmMode = mode;
     document.getElementById('llmModal').classList.remove('hidden');
+    
     const inputEl = document.getElementById('llmInput');
     const outputEl = document.getElementById('llmOutput');
+    const persistentCheck = document.getElementById('llmPersistentCheck');
+    const resetBtn = document.getElementById('llmResetBtn');
+
+    // Restore mode-specific state
     inputEl.value = llmState[mode].input;
     outputEl.value = llmState[mode].output;
+    persistentCheck.checked = llmState[mode].persistent;
+    
+    // UI Logic: Show reset only if persistent is ON
+    if (llmState[mode].persistent) resetBtn.classList.remove('hidden');
+    else resetBtn.classList.add('hidden');
+
     let savedSys = llmSettings.system_xl;
     if (activeLlmMode === 'flux') savedSys = llmSettings.system_flux;
     else if (activeLlmMode === 'qwen') savedSys = llmSettings.system_qwen;
     document.getElementById('llmSystemPrompt').value = savedSys || "";
+    
     updateLlmButtonState();
     if (!inputEl.value) inputEl.focus();
+    
+    // Refresh icons in modal (Reset button uses refresh-cw)
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 window.closeLlmModal = () => document.getElementById('llmModal').classList.add('hidden');
@@ -324,9 +339,34 @@ window.updateLlmState = function() {
     llmState[activeLlmMode].input = document.getElementById('llmInput').value;
 }
 
+// NEW: Toggle Logic
+window.toggleLlmPersistent = function() {
+    const isChecked = document.getElementById('llmPersistentCheck').checked;
+    llmState[activeLlmMode].persistent = isChecked;
+    
+    const resetBtn = document.getElementById('llmResetBtn');
+    if (isChecked) {
+        resetBtn.classList.remove('hidden');
+    } else {
+        resetBtn.classList.add('hidden');
+        // Optional: Clear history when switching off to free memory
+        llmState[activeLlmMode].history = []; 
+    }
+}
+
+// NEW: Reset Logic (Clear current mode's history array)
+window.resetLlmHistory = function() {
+    if (confirm("Reset current chat history? All previous context for this mode will be deleted.")) {
+        llmState[activeLlmMode].history = [];
+        if (Toast) Toast.show({ text: 'Context Reset', duration: 'short' });
+    }
+}
+
 function updateLlmButtonState() {
     const hasOutput = llmState[activeLlmMode].output.trim().length > 0;
-    document.getElementById('llmGenerateBtn').innerText = hasOutput ? "ITERATE" : "GENERATE PROMPT";
+    const isPersistent = llmState[activeLlmMode].persistent;
+    // Iterate sounds better for persistent chat
+    document.getElementById('llmGenerateBtn').innerText = (isPersistent && hasOutput) ? "ITERATE" : "GENERATE PROMPT";
 }
 
 function loadLlmSettings() {
