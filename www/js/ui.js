@@ -132,7 +132,7 @@ window.setMode = async function(mode) {
         document.getElementById('genBtn').innerText = "GENERATE";
     }
 
-    const unifiedTitle = "BOJRO RESOLVER";
+    const unifiedTitle = "RESOLVER";
     if (titleEl) {
         titleEl.innerText = unifiedTitle;
         titleEl.setAttribute('data-text', unifiedTitle);

@@ -192,21 +192,33 @@ canvas {
     align-items: center;
     /* Respect Notch/Status Bar and add posh spacing */
     padding-top: clamp(20px, 6vh, 35px); 
-    margin-bottom: 25px;
+    margin-bottom: 10px;
 }
 
 h2 {
-    font-family: 'Orbitron', sans-serif !important; /* FIXED: Orbitron */
+    font-family: 'Orbitron', sans-serif !important;
     text-align: center;
     font-weight: 900;
     margin: 0;
-    font-size: clamp(20px, 6.5vw, 26px); 
+    
+    /* Responsive sizing */
+    font-size: clamp(16px, 5vw, 22px);    /* Increased size since we have 2 lines now */
+    letter-spacing: 3px;                  /* Keep the posh spacing */
+    line-height: 1.1;                     /* Tight vertical spacing */
+    
     color: var(--text-main);
     text-transform: uppercase;
-    letter-spacing: 5px;
     position: relative;
     flex: 1;
-    white-space: nowrap;
+    
+    /* CRITICAL CHANGE: Allow wrapping */
+    white-space: pre-line;                /* Respects \n characters */
+}
+
+/* Ensure glitch layers also wrap */
+h2::before,
+h2::after {
+    white-space: pre-line;
 }
 
 /* --- THE CLEAN MODULAR GLITCH EFFECT --- */
@@ -468,16 +480,19 @@ input[readonly], textarea[readonly] {
     width: 100%;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
-    padding: 16px;
+    
+    /* UPDATE PADDING & FONT SETTINGS */
+    padding: 10px;                           /* Reduced from 16px to save space */
+    font-size: clamp(10px, 4vw, 16px);     /* Smaller font on tiny screens */
+    letter-spacing: 1px;                     /* Reduced from 3px to 1px */
+    gap: 8px;                                /* Reduced gap from 12px */
+    
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px; 
     font-family: 'Orbitron', sans-serif;
     font-weight: 900;
-    font-size: clamp(14px, 5vw, 18px); 
     text-transform: uppercase;
-    letter-spacing: 3px;
     white-space: nowrap; 
     cursor: pointer;
     border-radius: 4px;
@@ -495,7 +510,6 @@ input[readonly], textarea[readonly] {
         0px 1px 0px rgba(255, 255, 255, 0.05),
         0px -1px 0px rgba(0, 0, 0, 0.8);
 }
-
 .brick-btn svg {
     width: 24px;
     height: 24px;
