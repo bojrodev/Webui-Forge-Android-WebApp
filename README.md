@@ -13,7 +13,7 @@ Unlike standard browser wrappers, Resolver is built with a **Hybrid Architecture
 
 ---
 
-## 📸 Screenshots
+## ⚡ Screenshots
 
 <table>
   <tr>
@@ -64,7 +64,7 @@ Unlike standard browser wrappers, Resolver is built with a **Hybrid Architecture
 
 ---
 
-## 🚀 Key Features
+## ⚡ Key Features
 
 ### ⚡ v1.2 Connectivity & Power
 * **Smart Connection Mode:** Toggle instantly between **Local Mode** (Auto-appends ports to local IPs) and **External Mode** (Enforces HTTPS for Ngrok/Cloud tunnels, ignoring ports).
@@ -76,7 +76,7 @@ Unlike standard browser wrappers, Resolver is built with a **Hybrid Architecture
 * **Speed Boost:** Skip redundant diffusion steps (`bnb-nf4`, `fp8`) to significantly reduce generation time on Flux models.
 * **Tunable:** Adjust threshold and skip steps directly from the Flux UI.
 
-### 🖌️ Native Hi-Res Fix
+### ⚡ Native Hi-Res Fix
 * **Upscaling Engine:** Full support for `Hires. fix` across SDXL, Flux, and Qwen modes.
 * **Controls:** Select upscalers (ESRGAN, etc.), set denoising strength, and upscale factors within the app.
 
@@ -84,19 +84,19 @@ Unlike standard browser wrappers, Resolver is built with a **Hybrid Architecture
 * **Native Foreground Service:** Uses a Java-based service and Wake Locks to keep WebSocket connections alive during long Flux GGUF workflows or massive batch queues, even when the screen is off.
 * **Queue Persistence:** Robust state management system for Ongoing, Next, and Completed jobs.
 
-### 🎨 Advanced Generation Engines
+### ⚡ Advanced Generation Engines
 * **Flux GGUF Optimized:** Includes dedicated selectors for VAE, CLIP, and T5-XXL models, with support for specific quantization bits.
 * **Qwen / Z-Image Turbo:** Specialized "Turbo Generate" mode for Qwen models with dense narrative support.
 * **SDXL Powerhouse:** Full control over sampling, scheduling, and aspect ratio locking.
 * **Mobile Inpainting:** A touch-optimized canvas editor with mask blurring, soft inpainting, and denoising controls.
 
-### 🧠 Magic Prompt (Local LLM)
+### ⚡ Magic Prompt (Local LLM)
 * **Smart Expansion:** Integrates with local LLM servers (LM Studio, Ollama) to translate simple ideas into professional prompts.
 * **Dynamic Mode Switching:** Automatically applies specialized system prompts for SDXL, Flux, and Qwen narratives.
 
 ---
 
-## 🤖 Magic Prompt (LLM) Setup
+## ⚡ Magic Prompt (LLM) Setup
 
 To use the "Magic Prompt" feature, it is highly recommended to host a **Bojro PromptMaster** model on your PC.
 
@@ -111,11 +111,11 @@ To use the "Magic Prompt" feature, it is highly recommended to host a **Bojro Pr
 
 ---
 
-## 🔌 Remote PC Wake (The Power Button)
+## ⚡ Remote PC Wake (The Power Button)
 
 Resolver features a remote power signal to start (or stop) your WebUI directly from the app home screen.
 
-**Requirement:** Requires the `BojroPowerv3portable.exe` helper running on your PC.
+**Requirement:** Requires the `BojroPowerv2portable.exe` helper running on your PC.
 
 1.  **Run Helper:** Execute the helper app on your PC.
 2.  **Configure:** Go to the **CFG Tab** in Resolver and set your **Wake Port** (Default: `5000`).
@@ -124,14 +124,14 @@ Resolver features a remote power signal to start (or stop) your WebUI directly f
 
 ---
 
-## 📂 Workflow & LoRA Management
+## ⚡ Workflow & LoRA Management
 * **Neo Bridge:** Browse LoRAs by folder with smart thumbnail caching.
 * **Config Injection:** Set preferred weights and trigger words that auto-inject into your prompts.
 * **Metadata Analysis:** Built-in PNG Info reader with one-tap "Copy to Mode" functionality to restore parameters from history.
 
 ---
 
-## 🛠️ Installation & Building
+## ⚡ Installation & Building
 
 ### Installation
 1.  Install **WebUI Forge (Neo)** on your PC.
