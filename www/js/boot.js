@@ -127,6 +127,18 @@ window.onload = function() {
             const targetDock = document.getElementById('dock-' + view);
             if (targetDock) targetDock.classList.add('active');
 
+            // --- RESTORED MISSING LOGIC START ---
+            if (view === 'gen') currentTask = 'txt';
+            if (view === 'inp') {
+                currentTask = 'inp';
+                // Trigger Inpaint Sampler default check if needed (ported from ui.js)
+                const inpSamplerEl = document.getElementById('inp_sampler');
+                if (inpSamplerEl && !localStorage.getItem('bojro_inp_sampler')) {
+                     inpSamplerEl.value = "DPM++ 2M SDE";
+                }
+            }
+            // --- RESTORED MISSING LOGIC END ---
+
             // 3. Trigger specific view logic
             if (view === 'cfg') loadConnectionConfig();
             if (view === 'gal' && typeof loadGallery === 'function') loadGallery();

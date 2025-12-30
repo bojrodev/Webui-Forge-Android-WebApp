@@ -630,7 +630,6 @@ function viewComfyImage(url) {
 }
 
 function forceComfyDownload(url) {
-    // Uses XHR Blob fetch to bypass <a> download restrictions on cross-origin
     const filename = "comfy_" + new Date().getTime() + ".png";
     const xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -639,19 +638,33 @@ function forceComfyDownload(url) {
     xhr.onload = function() {
         if (this.status === 200) {
             const blob = this.response;
-            const blobUrl = window.URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(blobUrl);
-            }, 100);
+
+            // FIX: Check if we are native (Android)
+            const isNative = window.Capacitor && window.Capacitor.isNative;
+
+            if (isNative && typeof saveToMobileGallery === 'function') {
+                // 1. Convert Blob to Base64
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    // 2. Pass to your existing utils.js helper
+                    saveToMobileGallery(reader.result);
+                }
+                reader.readAsDataURL(blob);
+            } else {
+                // Fallback: Standard Web Browser Download
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(blobUrl);
+                }, 100);
+            }
         }
     };
     
