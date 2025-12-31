@@ -461,6 +461,10 @@ async function queueComfyPrompt() {
     // 2. UI Updates (Spinning State)
     const btn = document.getElementById('comfyQueueBtn');
     btn.disabled = true;
+    
+    if (typeof updateBatchNotification === 'function') {
+        updateBatchNotification("ComfyUI", true, "Generating...");
+        }
     btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i> RUNNING...`; // Keeps spinning!
     
     document.getElementById('comfyProgressBar').style.width = "0%";
@@ -574,6 +578,21 @@ function handleComfyMessage(event) {
             
             if(bar) bar.style.width = "100%";
             if(txt) txt.innerText = "COMPLETE";
+            if (window.ResolverService) {
+                try {
+                    window.ResolverService.stop();
+                } catch (e) {}
+            } else if (window.Capacitor && window.Capacitor.Plugins.ResolverService) {
+                try {
+                     window.Capacitor.Plugins.ResolverService.stop();
+                } catch (e) {}
+            }
+
+            // 2. SEND THE FINAL ALERT
+            // This makes the sound and says "ComfyUI Generation Complete"
+            if (typeof sendCompletionNotification === 'function') {
+                sendCompletionNotification("ComfyUI Generation Complete");
+            }
             
             // Re-enable Button
             if(btn) {
