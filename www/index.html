@@ -1126,7 +1126,11 @@
         <div class="glass-dock">
             <div class="dock-item active" id="dock-gen" onclick="switchTab('gen')"><i data-lucide="zap"></i><span>GEN</span></div>
             <div class="dock-item" id="dock-inp" onclick="switchTab('inp')"><i data-lucide="brush"></i><span>INP</span></div>
-            <div class="dock-item" id="dock-que" onclick="switchTab('que')"><i data-lucide="layers"></i><span>QUE</span></div>
+            <div class="dock-item" id="dock-que" onclick="switchTab('que')" style="position: relative;">
+                <div id="queueBadge" class="badge hidden">0</div>
+                <i data-lucide="layers"></i>
+                <span>QUE</span>
+            </div>
             <div class="dock-item" id="dock-gal" onclick="switchTab('gal')"><i data-lucide="image"></i><span>GAL</span></div>
             <div class="dock-item" id="dock-ana" onclick="switchTab('ana')"><i data-lucide="scan-line"></i><span>ANA</span></div>
             
