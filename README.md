@@ -1,13 +1,13 @@
 # Resolver: Native Android Client for WebUI Forge (Flux, SDXL & Qwen)
 
-![Version](https://img.shields.io/badge/Version-1.2-purple.svg)
+![Version](https://img.shields.io/badge/Version-1.3-purple.svg)
 ![Platform](https://img.shields.io/badge/Platform-Android%2010+-green.svg)
 ![Backend](https://img.shields.io/badge/Backend-Forge%20Neo-blue)
 ![License](https://img.shields.io/badge/License-GPLv3-red.svg)
 
 **Resolver** is a high-performance, native Android interface for [Stable Diffusion WebUI Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo).
 
-**New in v1.2:** Resolver now features a centralized **Configuration (CFG)** tab for seamless Local/External switching, a remote "Kill Switch", **Flux First Block Cache (FBC)** integration, and native **Hi-Res Fix** support.
+**New in v1.3:** Resolver now features a dedicated **ComfyUI Engine** for workflow execution, centralized **Configuration (CFG)** for seamless Local/External switching, a remote "Kill Switch", **Flux First Block Cache (FBC)** integration, and native **Hi-Res Fix** support.
 
 Unlike standard browser wrappers, Resolver is built with a **Hybrid Architecture** (Capacitor 6.0 + Vanilla JS) and utilizes **Native Android Foreground Services** to ensure your generation queues never die in the background.
 
@@ -66,10 +66,16 @@ Unlike standard browser wrappers, Resolver is built with a **Hybrid Architecture
 
 ## ⚡ Key Features
 
-### ⚡ v1.2 Connectivity & Power
+### ⚡ v1.3 Connectivity & Power
 * **Smart Connection Mode:** Toggle instantly between **Local Mode** (Auto-appends ports to local IPs) and **External Mode** (Enforces HTTPS for Ngrok/Cloud tunnels, ignoring ports).
-* **Custom Service Ports:** Define independent ports for your WebUI (Default: `7860`), LLM Server (`1234`), and Power Service (`5000`) inside the new CFG tab.
+* **Custom Service Ports:** Define independent ports for your WebUI (Default: `7860`), LLM Server (`1234`), ComfyUI (`8188`), and Power Service (`5000`) inside the CFG tab.
 * **Remote Wake & Kill:** Use the "Bojro Dev Power" controls to send Wake-on-LAN signals or a **KILL!** signal to immediately halt the backend server from your phone.
+
+### ⚡ ComfyUI Engine
+* **Workflow Orchestration:** Load standard API-compatible ComfyUI `.json` workflows directly into the app.
+* **Dynamic UI Generation:** The engine automatically parses the workflow graph to build native sliders, dropdowns, and text inputs for samplers, checkpoints, and prompts.
+* **Live WebSocket Feedback:** Features real-time step monitoring and binary image previews delivered via persistent socket connections.
+* **Integrated Gallery:** Automatically archives final ComfyUI outputs into the main Resolver history for cross-engine metadata analysis.
 
 ### ⚡ Flux First Block Cache (FBC)
 * **Native Integration:** First mobile client to support the **Forge Block Cache** extension.
@@ -115,7 +121,7 @@ To use the "Magic Prompt" feature, it is highly recommended to host a **Bojro Pr
 
 Resolver features a remote power signal to start (or stop) your WebUI directly from the app home screen.
 
-**Requirement:** Requires the `BojroPowerv2portable.exe` helper running on your PC.
+**Requirement:** Requires the `BojroPowerv3portable.exe` helper running on your PC.
 
 1.  **Run Helper:** Execute the helper app on your PC.
 2.  **Configure:** Go to the **CFG Tab** in Resolver and set your **Wake Port** (Default: `5000`).
@@ -134,7 +140,7 @@ Resolver features a remote power signal to start (or stop) your WebUI directly f
 ## ⚡ Installation & Building
 
 ### Installation
-1.  Install **WebUI Forge (Neo)** on your PC.
+1.  Install **WebUI Forge (Neo)** and/or **ComfyUI** on your PC.
 2.  Download the latest `.apk` from the **Releases Page**.
 3.  Ensure your phone and PC are on the same Wi-Fi.
 4.  Navigate to the **CFG Tab**, enter your PC's IP, and tap **Save Configuration**.
