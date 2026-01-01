@@ -16,6 +16,9 @@ let selectedComfyImages = new Set(); // Stores the URLs of selected images
 
 let isComfyGenerating = false;
 
+let selectedTemplates = new Set();
+let isTmplSelectionMode = false;
+
 // --- 1. CONNECTION & SETUP ---
 
 function toggleComfyConfig() {
@@ -135,6 +138,7 @@ function loadWorkflowFile(event) {
             
             // Save Persistence
             saveComfySession(fileName, jsonStr);
+            saveTemplateToDB(fileName, jsonStr); // This saves the file to your new database box
             
             if (comfySocket && comfySocket.readyState === WebSocket.OPEN) {
                 document.getElementById('comfyQueueBtn').disabled = false;
@@ -628,18 +632,28 @@ function saveComfyToMainGallery(url) {
     xhr.onload = function() {
         const reader = new FileReader();
         reader.onloadend = function() {
-            const request = indexedDB.open("BojroHybridDB", 1);
-            request.onsuccess = function(event) {
-                const db = event.target.result;
+            // FIX: We use the 'db' variable that is already open at version 2
+            if (!db) {
+                console.error("Database connection not ready");
+                return;
+            }
+
+            try {
                 const tx = db.transaction(["images"], "readwrite");
                 const store = tx.objectStore("images");
                 store.add({
                     data: reader.result,
                     date: new Date().toLocaleString()
                 });
-                console.log("Saved Comfy image to History");
-            };
-        }
+                console.log("Saved to Gallery Successfully!");
+
+                // This tells the GAL tab to refresh so you see the image immediately
+                if (typeof loadGallery === 'function') loadGallery();
+                
+            } catch (e) {
+                console.error("Database Error:", e);
+            }
+        };
         reader.readAsDataURL(xhr.response);
     };
     xhr.open('GET', url);
@@ -761,24 +775,20 @@ function toggleComfySelectionMode() {
     const gallery = document.getElementById('comfyGalleryContainer');
     const selectBtn = document.getElementById('comfySelectBtn');
     const saveBtn = document.getElementById('comfySaveSelectedBtn');
+
+    // 1. Toggle the CSS class (This uses your new style.css rules)
+    selectBtn.classList.toggle('active', isComfySelectionMode);
+    
+    // 2. Toggle the text
+    selectBtn.innerText = isComfySelectionMode ? "CANCEL" : "SELECT";
     
     if (isComfySelectionMode) {
-        // Enter Selection Mode
         gallery.classList.add('selection-mode');
-        selectBtn.style.background = 'var(--text-main)';
-        selectBtn.style.color = 'var(--bg-glass)';
-        selectBtn.innerText = "CANCEL";
-        selectedComfyImages.clear(); // Reset selection
+        selectedComfyImages.clear();
         updateComfySelectionUI();
     } else {
-        // Exit Selection Mode
         gallery.classList.remove('selection-mode');
-        // Remove visual selection from all items
         Array.from(gallery.children).forEach(el => el.classList.remove('selected'));
-        
-        selectBtn.style.background = '';
-        selectBtn.style.color = '';
-        selectBtn.innerText = "SELECT";
         saveBtn.classList.add('hidden');
     }
 }
@@ -832,6 +842,208 @@ function saveSelectedComfyImages() {
         toggleComfySelectionMode();
         btn.innerHTML = originalText;
     }, 1000);
+}
+
+
+// 1. Function to actually put the file in the database
+function saveTemplateToDB(name, json) {
+    if (!db) return;
+    const tx = db.transaction(["comfy_templates"], "readwrite");
+    const store = tx.objectStore("comfy_templates");
+    store.put({ name: name, data: json, date: new Date().toLocaleString() });
+}
+
+// 2. Open the popup and show the list
+async function openComfyTemplateModal() {
+    document.getElementById('comfyTemplateModal').classList.remove('hidden');
+    renderTemplateList();
+    if(window.lucide) lucide.createIcons();
+}
+
+// 3. Close the popup and reset settings
+function closeComfyTemplateModal() {
+    document.getElementById('comfyTemplateModal').classList.add('hidden');
+    isTmplSelectionMode = false;
+    selectedTemplates.clear();
+    const btn = document.getElementById('tmplSelectBtn');
+    btn.innerText = "SELECT";
+    document.getElementById('tmplDeleteBtn').classList.add('hidden');
+}
+
+// 4. Create the list items you see on screen
+async function renderTemplateList() {
+    const list = document.getElementById('tmplList');
+    list.innerHTML = "";
+    
+    if (!db) return;
+    const tx = db.transaction(["comfy_templates"], "readonly");
+    const store = tx.objectStore("comfy_templates");
+    
+    // Get everything from the box
+    store.getAll().onsuccess = (e) => {
+        const all = e.target.result;
+        
+        if (all.length === 0) {
+            list.innerHTML = '<div style="text-align:center; color:var(--text-muted); margin-top:20px;">No templates saved yet.</div>';
+            return;
+        }
+
+        all.forEach(tmpl => {
+            const div = document.createElement('div');
+            // If it's selected, give it the 'selected' look from your CSS
+            div.className = `tmpl-item ${selectedTemplates.has(tmpl.name) ? 'selected' : ''}`;
+            div.style.marginBottom = "8px"; 
+            
+            div.innerHTML = `
+                <div class="tmpl-info">
+                    <span class="tmpl-name">${tmpl.name}</span>
+                    <span style="font-size:9px; color:var(--text-muted);">${tmpl.date}</span>
+                </div>
+                ${selectedTemplates.has(tmpl.name) ? '<i data-lucide="check-circle" size="14" style="color:var(--error);"></i>' : ''}
+            `;
+            
+            div.onclick = () => handleTmplClick(tmpl);
+            list.appendChild(div);
+        });
+        if(window.lucide) lucide.createIcons();
+    };
+}
+
+// 5. What happens when you tap a template in the list
+function handleTmplClick(tmpl) {
+    if (isTmplSelectionMode) {
+        // Just highlight/unhighlight if we are in deleting mode
+        if (selectedTemplates.has(tmpl.name)) {
+            selectedTemplates.delete(tmpl.name);
+        } else {
+            selectedTemplates.add(tmpl.name);
+        }
+        updateTmplUI();
+    } else {
+        // Actually LOAD the template if we are in normal mode
+        try {
+            comfyLoadedWorkflow = JSON.parse(tmpl.data);
+            document.getElementById('comfyLoadedFileName').innerText = tmpl.name;
+            buildComfyUI(comfyLoadedWorkflow);
+            
+            // Re-enable generate button if connected
+            if (comfySocket && comfySocket.readyState === WebSocket.OPEN) {
+                document.getElementById('comfyQueueBtn').disabled = false;
+            }
+            
+            closeComfyTemplateModal();
+        } catch (e) {
+            alert("Error loading template: " + e.message);
+        }
+    }
+}
+
+// 6. Turn selection mode ON or OFF
+function toggleTmplSelectionMode() {
+    isTmplSelectionMode = !isTmplSelectionMode;
+    const btn = document.getElementById('tmplSelectBtn');
+    
+    if (isTmplSelectionMode) {
+        // We only change the text and add the CSS class
+        btn.innerText = "CANCEL";
+        btn.classList.add('btn-cancel-active');
+    } else {
+        // We change the text back and remove the CSS class
+        btn.innerText = "SELECT";
+        btn.classList.remove('btn-cancel-active');
+        selectedTemplates.clear();
+    }
+    updateTmplUI();
+}
+
+// 7. Refresh the screen and show/hide the Delete button
+function updateTmplUI() {
+    renderTemplateList();
+    const count = selectedTemplates.size;
+    document.getElementById('tmplSelCount').innerText = count;
+    
+    const delBtn = document.getElementById('tmplDeleteBtn');
+    if (count > 0 && isTmplSelectionMode) {
+        delBtn.classList.remove('hidden');
+    } else {
+        delBtn.classList.add('hidden');
+    }
+}
+
+// 8. Delete only the ones you checked
+function deleteSelectedTemplates() {
+    if (selectedTemplates.size === 0) return;
+    
+    if (confirm(`Delete ${selectedTemplates.size} selected templates?`)) {
+        const tx = db.transaction(["comfy_templates"], "readwrite");
+        const store = tx.objectStore("comfy_templates");
+        
+        selectedTemplates.forEach(name => {
+            store.delete(name);
+        });
+        
+        tx.oncomplete = () => {
+            selectedTemplates.clear();
+            isTmplSelectionMode = false;
+            updateTmplUI();
+            const btn = document.getElementById('tmplSelectBtn');
+            btn.innerText = "SELECT";
+            btn.style.background = "";
+            btn.style.color = "";
+        };
+    }
+}
+
+// 9. Wipe everything
+function clearAllTemplates() {
+    if (confirm("Delete ALL saved templates? This cannot be undone.")) {
+        const tx = db.transaction(["comfy_templates"], "readwrite");
+        tx.objectStore("comfy_templates").clear();
+        tx.oncomplete = () => {
+            selectedTemplates.clear();
+            isTmplSelectionMode = false;
+            renderTemplateList();
+            updateTmplUI();
+        };
+    }
+}
+
+// Function to import many JSON files at once
+// Upgraded Import Function
+async function importMultipleTemplates(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    // Create a list of "tasks" for every file
+    const tasks = Array.from(files).map(file => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const jsonStr = e.target.result;
+                    JSON.parse(jsonStr); // Check if it's a real workflow
+                    saveTemplateToDB(file.name.toUpperCase(), jsonStr);
+                } catch (err) {
+                    console.error("Skipped bad file: " + file.name);
+                }
+                resolve(); // Always finish, even if the file was bad
+            };
+            reader.readAsText(file);
+        });
+    });
+
+    // Wait for ALL files to finish loading
+    await Promise.all(tasks);
+    
+    // Refresh the list once at the end
+    renderTemplateList();
+    
+    // Clear the button so you can import again
+    event.target.value = ""; 
+    
+    if(typeof Toast !== 'undefined') {
+        Toast.show({ text: `Import process complete`, duration: 'short' });
+    }
 }
 
 // 8. AUTO-INIT ON LOAD

@@ -1438,3 +1438,60 @@ input[readonly], textarea[readonly] {
     justify-content: center;
     z-index: 10;
 }
+
+
+.tmpl-item {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tmpl-item:active {
+    background: var(--bg-input);
+    transform: scale(0.98);
+}
+
+/* Style when a template is selected for deletion */
+.tmpl-item.selected {
+    border-color: var(--error);
+    background: rgba(244, 67, 54, 0.1);
+    box-shadow: 0 0 10px rgba(244, 67, 54, 0.1);
+}
+
+.tmpl-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none; /* Let the parent handle clicks */
+}
+
+.tmpl-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Ensure the list scrolls nicely inside the popup */
+#tmplList {
+    padding-right: 5px;
+}
+
+/* Custom scrollbar for the template list */
+#tmplList::-webkit-scrollbar {
+    width: 4px;
+}
+
+#tmplList::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 10px;
+}
+

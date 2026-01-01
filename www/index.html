@@ -713,6 +713,9 @@
                 <button onclick="document.getElementById('comfyWorkflowFile').click()" class="btn-small dashed">
                     LOAD NEW TEMPLATE
                 </button>
+                <button onclick="openComfyTemplateModal()" class="btn-small" style="margin-top:10px; background:var(--bg-input); width:100%;">
+                    <i data-lucide="folder-heart" size="14" style="margin-right:8px;"></i> LOAD SAVED TEMPLATE
+                </button>
             </div>
 
             <div id="comfy-dynamic-controls" class="col" style="gap: 10px;"></div>
@@ -865,7 +868,7 @@
                             <label for="cfgModeSwitch" style="margin: 0; color: var(--text-main); font-size: 13px;">External Link Toggle</label>
                             <input type="checkbox" id="cfgModeSwitch" class="bojro-switch">
                         </div>
-                        <input type="text" id="cfgBaseIp" placeholder="e.g. 192.16x.x.xxx or https://..." style="font-family: monospace;">
+                        <input type="text" id="cfgBaseIp" placeholder="http://... or https://..." style="font-family: monospace;">
                         <p style="font-size: 10px; color: var(--text-muted); margin: 0;">Enter IP http (local) or full https URL (external).</p>
                     </div>
                 </div>
@@ -1146,6 +1149,34 @@
             <div class="dock-item" id="dock-cfg" onclick="switchTab('cfg')"><i data-lucide="settings"></i><span>CFG</span></div>
         </div>
     </div>
+
+    <div id="comfyTemplateModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Saved Workflow</h3>
+                <button onclick="closeComfyTemplateModal()" class="close-btn">×</button>
+            </div>
+
+            <div class="row" style="gap:8px; margin-bottom:15px;">
+                <button id="tmplSelectBtn" onclick="toggleTmplSelectionMode()" class="btn-small" style="flex:1; font-size: 10px;">SELECT</button>
+
+                <input type="file" id="tmplImportFile" multiple accept=".json" class="hidden" onchange="importMultipleTemplates(event)">
+
+                <button onclick="document.getElementById('tmplImportFile').click()" class="btn-small" style="flex:1; font-size: 10px;">IMPORT</button>
+
+                <button onclick="clearAllTemplates()" class="btn-small" style="flex:1; color:var(--error); border-color:var(--error); font-size: 10px;">CLEAR ALL</button>
+            </div>
+            <div id="tmplList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:100px;">
+                <div style="text-align:center; color:var(--text-muted); margin-top:20px;">No templates saved yet.</div>
+            </div>
+
+            <button id="tmplDeleteBtn" onclick="deleteSelectedTemplates()" class="btn-main hidden" style="margin-top:15px; background:var(--error) !important; height:44px; font-size:11px !important; white-space:nowrap; padding:0 5px;">
+                DELETE SELECTED (<span id="tmplSelCount">0</span>)
+            </button>
+        </div>
+    </div>
+
+
 
     <script src="js/lora.js"></script>
     <script src="js/neo.js"></script>

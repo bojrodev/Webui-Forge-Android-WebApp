@@ -198,13 +198,16 @@ function getVramMapping() {
 
 // Wrapper function to initialize DB (called in boot.js)
 function initDatabase() {
-    const request = indexedDB.open("BojroHybridDB", 1);
+    const request = indexedDB.open("BojroHybridDB", 2)
     request.onupgradeneeded = e => {
         db = e.target.result;
-        db.createObjectStore("images", {
-            keyPath: "id",
-            autoIncrement: true
-        });
+        if (!db.objectStoreNames.contains("images")) {
+            db.createObjectStore("images", { keyPath: "id", autoIncrement: true });
+        }
+
+        if (!db.objectStoreNames.contains("comfy_templates")) {
+            db.createObjectStore("comfy_templates", { keyPath: "name" });
+        }
     };
     request.onsuccess = e => {
         db = e.target.result;
