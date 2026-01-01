@@ -1,4 +1,4 @@
-# Resolver: Native Android Client for WebUI Forge (Flux, SDXL & Qwen)
+# Resolver: Native Android Client for Stable Diffusion(Forge & ComfyUi). (Flux, SDXL & Qwen)
 
 ![Version](https://img.shields.io/badge/Version-1.2-purple.svg)
 ![Platform](https://img.shields.io/badge/Platform-Android%2010+-green.svg)
