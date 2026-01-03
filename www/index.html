@@ -795,9 +795,9 @@
         </div>
 
         <div id="view-gal" class="hidden">
-            <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
-                <label style="font-size: 14px; color: var(--text-main);">HISTORY</label>
-                <div style="display: flex; gap: 8px;">
+            <div class="row" style="justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; align-items: center;">
+                <label style="font-size: 14px; color: var(--text-main); white-space: nowrap;">HISTORY</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
                     <button onclick="clearDbGallery()" class="btn-small" style="background: rgba(244, 67, 54, 0.2); color: #f44336; border: 1px solid rgba(244, 67, 54, 0.3);">CLEAR ALL</button>
                     <button id="galSelectBtn" onclick="toggleGallerySelectionMode()" class="btn-small" style="background: var(--input-bg);">SELECT</button>
                     <button id="galDeleteBtn" onclick="deleteSelectedImages()" class="btn-small hidden" style="background: #f44336;">DELETE (0)</button>
@@ -987,7 +987,7 @@
                     <label style="color:#fff; width:50px;">Y</label>
                     <input type="range" id="editY" min="-1000" max="1000" oninput="updateEditorTransform()" class="orange-slider">
                 </div>
-                <button onclick="applyEditorChanges()" class="btn-small" style="background:var(--accent-gradient); color:white; height:44px; margin-top:10px;">PROCEED</button>
+                <button onclick="handleUniversalProceed()" class="btn-small" style="background:var(--accent-gradient); color:white; height:44px; margin-top:10px;">PROCEED</button>
             </div>
         </div>
     </div>

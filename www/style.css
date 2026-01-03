@@ -1495,3 +1495,36 @@ input[readonly], textarea[readonly] {
     border-radius: 10px;
 }
 
+/* --- COMFY MASKING MODE --- */
+
+/* 1. Hide the Upload Box */
+.comfy-mode-active #img-input-container {
+    display: none !important;
+}
+
+/* 2. Hide unwanted controls inside the Inpaint Panel */
+/* We keep Child 1 (Tool Draw/Erase) and Child 2 (Brush Size) */
+/* We hide everything from Child 3 onwards (Model, Prompts, Samplers, etc) */
+.comfy-mode-active #inpaintControls > :nth-child(n+3) {
+    display: none !important;
+}
+
+/* 3. Hide the buttons OUTSIDE the canvas wrapper (Generate, New Image, Clear View) */
+.comfy-mode-active #view-inp > .row {
+    display: none !important;
+}
+
+/* 4. Ensure Canvas takes full height */
+.comfy-mode-active #canvasWrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 5. Style the control box to sit nicely at the bottom */
+.comfy-mode-active #inpaintControls {
+    margin-top: 0;
+    border-radius: 0 0 12px 12px;
+    border-top: none;
+    flex-shrink: 0;
+}

@@ -132,3 +132,33 @@ let llmState = {
 };
 
 let activeLlmMode = 'xl';
+
+// --- COMFY EDITOR STATE ---
+// These flags help the app know if we are currently editing a mask for ComfyUI
+var isComfyMaskingMode = false;
+var comfyMaskTargetNodeId = null;
+
+// --- UNIVERSAL ROUTER ---
+// This function decides what happens when you click "PROCEED" in the editor.
+// It checks if you are in "Comfy Mode" or "Standard Mode".
+function handleUniversalProceed() {
+    // 1. Check if we are in "ComfyUI Masking Mode"
+    if (typeof isComfyMaskingMode !== 'undefined' && isComfyMaskingMode) {
+        // We are editing a mask for ComfyUI -> Send it back to Comfy
+        if (typeof finishComfyMasking === 'function') {
+            finishComfyMasking();
+        } else {
+            console.error("finishComfyMasking not found! Check comfy_logic.js");
+            alert("Error: Comfy Logic not loaded.");
+        }
+    } 
+    // 2. Otherwise, do the standard app behavior (Normal Generation)
+    else {
+        // We are just editing a normal generation -> Save to Gallery/Canvas
+        if (typeof applyEditorChanges === 'function') {
+            applyEditorChanges();
+        } else {
+            console.error("applyEditorChanges not found! Is editor.js loaded?");
+        }
+    }
+}

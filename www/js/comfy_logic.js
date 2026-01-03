@@ -8,16 +8,25 @@ let comfySocket = null;
 let comfyClientId = crypto.randomUUID();
 let comfyLoadedWorkflow = null; 
 let comfyInputMap = {}; 
-let comfyServerLists = { checkpoints: [], loras: [], vaes: [], clips: [], unets: [] };
+// Find this line at the top
+let comfyServerLists = { checkpoints: [], loras: [], vaes: [], clips: [], unets: [], samplers: [], schedulers: [] };
 
 let comfyRunBuffer = [];        // Stores all images from the current run
 let isComfySelectionMode = false; // Tracks if we are selecting images
-let selectedComfyImages = new Set(); // Stores the URLs of selected images
+let selectedComfyImages = new Map(); // Stores DOM Element -> URL
 
 let isComfyGenerating = false;
 
 let selectedTemplates = new Set();
 let isTmplSelectionMode = false;
+
+let originalInpHtml = null;
+
+// --- COMFY EDITOR STATE ---
+var isComfyMaskingMode = false;
+var comfyMaskTargetNodeId = null;
+
+
 
 // --- 1. CONNECTION & SETUP ---
 
@@ -59,7 +68,9 @@ function connectToComfy() {
                 fetchComfyList('LoraLoader', 'lora_name', 'loras'),
                 fetchComfyList('VAELoader', 'vae_name', 'vaes'),
                 fetchComfyList('CLIPLoader', 'clip_name', 'clips'),
-                fetchComfyList('UNETLoader', 'unet_name', 'unets')
+                fetchComfyList('UNETLoader', 'unet_name', 'unets'),
+                fetchComfyList('KSampler', 'sampler_name', 'samplers'),
+                fetchComfyList('KSampler', 'scheduler', 'schedulers')
             ]);
             
             // Re-build UI if workflow exists to populate dropdowns
@@ -156,6 +167,25 @@ function saveComfySession(filename, jsonStr) {
 }
 
 function restoreComfySession() {
+    // 1. Try to load the "Snapshot" (Your modified settings)
+    const snapshot = localStorage.getItem('bojro_comfy_snapshot');
+    const snapshotName = localStorage.getItem('bojro_comfy_snapshot_name');
+
+    if (snapshot && snapshotName) {
+        try {
+            comfyLoadedWorkflow = JSON.parse(snapshot);
+            const label = document.getElementById('comfyLoadedFileName');
+            if(label) label.innerText = snapshotName;
+            
+            buildComfyUI(comfyLoadedWorkflow);
+            console.log("Restored Snapshot:", snapshotName);
+            return; // Stop here, we are done
+        } catch(e) {
+            console.warn("Snapshot corrupted, ignoring...");
+        }
+    }
+
+    // 2. Fallback: Load the original clean template
     const savedName = localStorage.getItem('bojro_comfy_template_name');
     const savedJson = localStorage.getItem('bojro_comfy_template_json');
     
@@ -165,21 +195,22 @@ function restoreComfySession() {
             const label = document.getElementById('comfyLoadedFileName');
             if(label) label.innerText = savedName;
             
-            // Rebuild UI
             buildComfyUI(comfyLoadedWorkflow);
-            console.log("Restored Comfy Template:", savedName);
-        } catch(e) {
-            console.warn("Failed to restore template:", e);
-        }
+        } catch(e) { console.warn(e); }
     }
 }
 
 function unloadComfyTemplate() {
     if(confirm("Unload current template?")) {
-        // Clear Storage
+        // Clear Original
         localStorage.removeItem('bojro_comfy_template_name');
         localStorage.removeItem('bojro_comfy_template_json');
         
+        // NEW: Clear Snapshot too
+        localStorage.removeItem('bojro_comfy_snapshot');
+        localStorage.removeItem('bojro_comfy_snapshot_name');
+        
+        // ... (Keep the rest of your existing code here) ...
         // Reset Memory
         comfyLoadedWorkflow = null;
         comfyInputMap = {};
@@ -322,8 +353,25 @@ function createComfySampler(parent, nodeId, inputs, title) {
     wrapper.className = 'glass-box node-group';
     wrapper.innerHTML = `<div class="node-header"><span>🎛️ ${title}</span> <span style="opacity:0.5">#${nodeId}</span></div>`;
 
+    // 1. Sampler & Scheduler Dropdowns
+    // We check if the input exists in the node before adding the control
+    if (inputs.sampler_name !== undefined) {
+        addComfyDropdown(wrapper, nodeId, 'sampler_name', 'Sampler', comfyServerLists.samplers, inputs.sampler_name);
+    }
+    if (inputs.scheduler !== undefined) {
+        addComfyDropdown(wrapper, nodeId, 'scheduler', 'Schedule', comfyServerLists.schedulers, inputs.scheduler);
+    }
+
+    // 2. Standard Sliders
     if (inputs.steps !== undefined) addComfySlider(wrapper, nodeId, 'steps', 'Steps', inputs.steps, 1, 100, 1);
     if (inputs.cfg !== undefined) addComfySlider(wrapper, nodeId, 'cfg', 'CFG Scale', inputs.cfg, 1, 20, 0.5);
+    
+    // 3. Denoise Slider (NEW)
+    // Denoise runs from 0.0 to 1.0 usually
+    if (inputs.denoise !== undefined) {
+        addComfySlider(wrapper, nodeId, 'denoise', 'Denoise', inputs.denoise, 0, 1, 0.01);
+    }
+
     if (inputs.seed !== undefined && !Array.isArray(inputs.seed)) addComfySeed(wrapper, nodeId, 'seed', inputs.seed);
 
     parent.appendChild(wrapper);
@@ -363,16 +411,72 @@ function createComfyResolution(parent, nodeId, inputs, title) {
 function createComfyImageUpload(parent, nodeId, inputs, title) {
     const wrapper = document.createElement('div');
     wrapper.className = 'glass-box node-group';
-    wrapper.innerHTML = `<div class="node-header"><span>🖼️ INPUT IMAGE</span> <span style="opacity:0.5">#${nodeId}</span></div>`;
+    wrapper.style.padding = '10px';
+    wrapper.innerHTML = `<div class="node-header" style="margin-bottom:10px;"><span>🖼️ INPUT IMAGE</span> <span style="opacity:0.5">#${nodeId}</span></div>`;
 
     const inputId = `file_${nodeId}`;
+    const thumbId = `thumb_${nodeId}`;
+    const labelId = `label_${nodeId}`;
+    
+    // Check if image exists in workflow
+    const currentImgName = inputs.image || "No image selected";
+    const currentImgUrl = inputs.image ? `http://${comfyHost}/view?filename=${inputs.image}&type=input` : '';
+    const displayStyle = currentImgUrl ? 'display:block;' : 'display:none;';
+
     wrapper.innerHTML += `
-        <input type="file" id="${inputId}" accept="image/*" style="margin-bottom:10px">
-        <button class="btn-small" onclick="uploadComfyImage('${nodeId}', '${inputId}')" style="width:100%; justify-content:center;">UPLOAD & SET</button>
-        <div id="status_${nodeId}" style="font-size:10px; color:var(--text-muted); margin-top:5px; font-family:monospace;">${inputs.image}</div>
+        <div style="background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:10px; overflow:hidden; min-height:120px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color);">
+            <img id="${thumbId}" src="${currentImgUrl}" style="width:100%; height:auto; max-height:250px; object-fit:contain; ${displayStyle}" onerror="this.style.display='none'">
+            <div id="placeholder_${nodeId}" style="color:var(--text-muted); font-size:10px; ${currentImgUrl ? 'display:none' : 'display:block'}">
+                <i data-lucide="image" size="24" style="opacity:0.5; margin-bottom:5px;"></i><br>NO IMAGE
+            </div>
+        </div>
+
+        <input type="file" id="${inputId}" accept="image/*" class="hidden" onchange="uploadComfyImage('${nodeId}', '${inputId}')">
+        
+        <div class="row" style="background:var(--bg-input); padding:8px; border-radius:6px; margin-bottom:8px; align-items:center;">
+            <i data-lucide="file" size="12" style="color:var(--text-muted); margin-right:6px;"></i>
+            <span id="${labelId}" style="font-size:11px; font-family:monospace; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${currentImgName}</span>
+        </div>
+
+        <div class="row" style="gap:8px;">
+            <button class="btn-small" onclick="document.getElementById('${inputId}').click()" style="flex:2; background:rgba(255,255,255,0.1);">
+                <i data-lucide="upload" size="12" style="margin-right:4px;"></i> UPLOAD
+            </button>
+            <button class="btn-small" onclick="startComfyMasking('${nodeId}')" style="flex:1; background:var(--accent-secondary); color:white;" title="Mask/Edit">
+                <i data-lucide="brush" size="12"></i>
+            </button>
+            <button class="btn-small" onclick="clearComfyImage('${nodeId}')" style="flex:0 0 32px; background:rgba(244,67,54,0.2); color:#f44336; padding:0; display:flex; align-items:center; justify-content:center; border:1px solid rgba(244,67,54,0.3);" title="Clear Image">
+                <i data-lucide="x" size="14"></i>
+            </button>
+        </div>
+        
+        <div id="status_${nodeId}" style="font-size:9px; color:var(--text-muted); margin-top:5px; text-align:right;"></div>
     `;
     
     parent.appendChild(wrapper);
+}
+
+function clearComfyImage(nodeId) {
+    if(!confirm("Clear this image?")) return;
+
+    // 1. Update Memory (Clear input)
+    updateComfyValue(nodeId, 'image', '');
+
+    // 2. Update UI Elements
+    const thumbImg = document.getElementById(`thumb_${nodeId}`);
+    const placeholder = document.getElementById(`placeholder_${nodeId}`);
+    const labelSpan = document.getElementById(`label_${nodeId}`);
+    const input = document.getElementById(`file_${nodeId}`);
+    const status = document.getElementById(`status_${nodeId}`);
+
+    if(thumbImg) {
+        thumbImg.src = '';
+        thumbImg.style.display = 'none';
+    }
+    if(placeholder) placeholder.style.display = 'block';
+    if(labelSpan) labelSpan.innerText = "No image selected";
+    if(input) input.value = ""; // Reset the file picker
+    if(status) status.innerText = "";
 }
 
 function addComfySlider(parent, nodeId, field, label, val, min, max, step) {
@@ -413,12 +517,21 @@ function updateComfyValue(nodeId, field, value) {
     let finalVal = value;
     const node = comfyLoadedWorkflow[nodeId];
     
+    // Standard parsing
     if (['steps','width','height','seed'].includes(field)) finalVal = parseInt(value);
-    if (['cfg','strength_model','strength_clip'].includes(field)) finalVal = parseFloat(value);
     
+    // NEW: Added 'denoise' to the float list
+    if (['cfg','strength_model','strength_clip','denoise'].includes(field)) finalVal = parseFloat(value);
+    
+    // Update the memory
     if (node && node.inputs) {
         node.inputs[field] = finalVal;
     }
+
+    // NEW: Save to disk immediately!
+    localStorage.setItem('bojro_comfy_snapshot', JSON.stringify(comfyLoadedWorkflow));
+    const currentName = document.getElementById('comfyLoadedFileName').innerText;
+    localStorage.setItem('bojro_comfy_snapshot_name', currentName);
 }
 
 function randomizeComfySeed(uid) {
@@ -430,11 +543,19 @@ function randomizeComfySeed(uid) {
 async function uploadComfyImage(nodeId, inputId) {
     const fileInput = document.getElementById(inputId);
     const statusSpan = document.getElementById(`status_${nodeId}`);
+    const thumbImg = document.getElementById(`thumb_${nodeId}`);
+    const placeholder = document.getElementById(`placeholder_${nodeId}`);
+    const labelSpan = document.getElementById(`label_${nodeId}`);
     
     if (fileInput.files.length === 0) return;
     
+    const file = fileInput.files[0];
+    
+    // Immediate UI update (Optimistic)
+    if(labelSpan) labelSpan.innerText = file.name;
+
     const formData = new FormData();
-    formData.append("image", fileInput.files[0]);
+    formData.append("image", file);
     formData.append("overwrite", "true");
 
     if(statusSpan) statusSpan.innerText = "UPLOADING...";
@@ -446,13 +567,27 @@ async function uploadComfyImage(nodeId, inputId) {
         });
         const data = await resp.json();
         
-        comfyLoadedWorkflow[nodeId].inputs.image = data.name;
+        // 1. Update Memory
+        updateComfyValue(nodeId, 'image', data.name);
+        
+        // 2. Update Status
         if(statusSpan) {
-            statusSpan.innerText = "READY: " + data.name;
+            statusSpan.innerText = "DONE";
             statusSpan.style.color = "var(--success)";
+            setTimeout(() => statusSpan.innerText = "", 2000);
         }
+
+        // 3. Update Visuals
+        if (thumbImg) {
+            thumbImg.src = `http://${comfyHost}/view?filename=${data.name}&type=input&t=${Date.now()}`;
+            thumbImg.style.display = 'block';
+        }
+        if (placeholder) placeholder.style.display = 'none';
+        if (labelSpan) labelSpan.innerText = data.name;
+
     } catch (e) {
         alert("Upload Failed: " + e);
+        if(statusSpan) statusSpan.innerText = "ERROR";
     }
 }
 
@@ -795,12 +930,14 @@ function toggleComfySelectionMode() {
 
 function handleComfyItemClick(element, url) {
     if (isComfySelectionMode) {
-        // Toggle Selection
-        if (selectedComfyImages.has(url)) {
-            selectedComfyImages.delete(url);
+        // Use the DOM Element as the key (Always Unique)
+        if (selectedComfyImages.has(element)) {
+            // Deselect
+            selectedComfyImages.delete(element);
             element.classList.remove('selected');
         } else {
-            selectedComfyImages.add(url);
+            // Select
+            selectedComfyImages.set(element, url);
             element.classList.add('selected');
         }
         updateComfySelectionUI();
@@ -827,10 +964,10 @@ function updateComfySelectionUI() {
 function saveSelectedComfyImages() {
     if (selectedComfyImages.size === 0) return;
     
-    // Save every selected URL to the main app gallery
-    selectedComfyImages.forEach(url => {
+    // Iterate over the Map values (the URLs)
+    for (const url of selectedComfyImages.values()) {
         saveComfyToMainGallery(url);
-    });
+    }
     
     // Visual Feedback
     const btn = document.getElementById('comfySaveSelectedBtn');
@@ -1044,6 +1181,194 @@ async function importMultipleTemplates(event) {
     if(typeof Toast !== 'undefined') {
         Toast.show({ text: `Import process complete`, duration: 'short' });
     }
+}
+
+// --- NEW MASKING FUNCTIONS (ROBUST TAB SWITCH) ---
+
+// --- NEW MASKING FUNCTIONS (ROBUST TAB SWITCH) ---
+
+let comfyBaseImage = null; // Stores the clean, original image without orange lines
+
+function startComfyMasking(nodeId) {
+    // 1. Get the image filename from the node
+    const node = comfyLoadedWorkflow[nodeId];
+    const currentImageName = node.inputs.image;
+    
+    if (!currentImageName) {
+        alert("Please upload a base image first!");
+        return;
+    }
+
+    // 2. Set Global Flags
+    isComfyMaskingMode = true;
+    comfyMaskTargetNodeId = nodeId;
+
+    // 3. Switch to the Inpaint Tab
+    if(typeof switchTab === 'function') switchTab('inp');
+    
+    // 4. UI Hacking: Hide normal buttons
+    const view = document.getElementById('view-inp');
+    view.classList.add('comfy-mode-active'); 
+    
+    document.getElementById('img-input-container').classList.add('hidden');
+    document.getElementById('canvasWrapper').classList.remove('hidden');
+
+    // 5. Create the "APPLY MASK" Toolbar
+    let comfyBar = document.getElementById('comfy-mask-bar');
+    if (!comfyBar) {
+        comfyBar = document.createElement('div');
+        comfyBar.id = 'comfy-mask-bar';
+        comfyBar.className = 'glass-box';
+        comfyBar.style.cssText = "margin-top:10px; background:var(--accent-secondary); border:1px solid var(--accent-primary);";
+        comfyBar.innerHTML = `
+            <div class="row" style="justify-content:space-between; align-items:center;">
+                <label style="color:white; font-weight:900;"><i data-lucide="brush"></i> MASK EDITING</label>
+                <div class="row" style="width:auto; gap:10px;">
+                    <button class="btn-small" onclick="cancelComfyMasking()" style="background:rgba(0,0,0,0.2);">CANCEL</button>
+                    <button class="btn-small" onclick="finishComfyMasking()" style="background:white; color:var(--accent-secondary); font-weight:900;">APPLY MASK</button>
+                </div>
+            </div>
+        `;
+        const canvasWrap = document.getElementById('canvasWrapper');
+        canvasWrap.insertBefore(comfyBar, canvasWrap.firstChild);
+    }
+    comfyBar.classList.remove('hidden');
+
+    // 6. Load the Image
+    const imageUrl = `http://${comfyHost}/view?filename=${currentImageName}&type=input`;
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = imageUrl;
+    
+    img.onload = () => {
+        // STORE THE CLEAN IMAGE GLOBALLLY
+        comfyBaseImage = img;
+
+        const canvas = document.getElementById('paintCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Resize canvases
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // Update Globals for the engine
+        if (typeof mainCanvas !== 'undefined') {
+            mainCanvas = canvas;
+            mainCtx = ctx;
+        }
+        
+        // Draw image on the visual canvas (for user to see)
+        ctx.drawImage(img, 0, 0);
+        
+        // SETUP THE MASK CANVAS (The invisible one)
+        // This is where the magic happens. We clear it to transparent.
+        // Your engine.js will draw strokes here when you drag your finger.
+        if (typeof maskCanvas !== 'undefined' && maskCanvas) {
+            maskCanvas.width = img.width;
+            maskCanvas.height = img.height;
+            const mCtx = maskCanvas.getContext('2d');
+            mCtx.clearRect(0,0, maskCanvas.width, maskCanvas.height);
+        }
+        
+        if(window.lucide) lucide.createIcons();
+    };
+}
+
+function cancelComfyMasking() {
+    isComfyMaskingMode = false;
+    comfyMaskTargetNodeId = null;
+    comfyBaseImage = null; // Clear memory
+    
+    // 1. Remove the special CSS class
+    document.getElementById('view-inp').classList.remove('comfy-mode-active');
+    
+    // 2. Hide the Comfy Toolbar
+    const bar = document.getElementById('comfy-mask-bar');
+    if(bar) bar.classList.add('hidden');
+    
+    // 3. CLEAN THE CANVAS
+    const canvas = document.getElementById('paintCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (typeof maskCanvas !== 'undefined' && maskCanvas) {
+        const mCtx = maskCanvas.getContext('2d');
+        mCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    }
+
+    // 4. RESET UI STATE (Fix for the "Giant Black Image")
+    // Hide the canvas wrapper
+    document.getElementById('canvasWrapper').classList.add('hidden');
+    // Show the original "Upload Box"
+    document.getElementById('img-input-container').classList.remove('hidden');
+
+    // 5. Switch back to Comfy Tab
+    if(typeof switchTab === 'function') switchTab('comfy');
+}
+
+async function finishComfyMasking() {
+    if (!comfyBaseImage) {
+        alert("Error: Base image lost.");
+        return;
+    }
+
+    // 1. Create Composite (Clean Image + Transparent Holes)
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = comfyBaseImage.width;
+    tempCanvas.height = comfyBaseImage.height;
+    const ctx = tempCanvas.getContext('2d');
+
+    ctx.drawImage(comfyBaseImage, 0, 0);
+
+    if (typeof maskCanvas !== 'undefined') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.drawImage(maskCanvas, 0, 0);
+    }
+
+    // 2. Upload
+    tempCanvas.toBlob(async (blob) => {
+        const btn = document.querySelector('#comfy-mask-bar button:last-child');
+        const oldText = btn.innerText;
+        btn.innerText = "UPLOADING...";
+
+        const formData = new FormData();
+        const filename = `mask_edit_${Date.now()}.png`;
+        formData.append("image", blob, filename);
+        formData.append("overwrite", "true");
+
+        try {
+            const resp = await fetch(`http://${comfyHost}/upload/image`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await resp.json();
+
+            // 3. Update Comfy Node Logic
+            updateComfyValue(comfyMaskTargetNodeId, 'image', data.name);
+            
+            // 4. Update UI Visuals (Thumbnail & Label)
+            const thumbImg = document.getElementById(`thumb_${comfyMaskTargetNodeId}`);
+            const labelSpan = document.getElementById(`label_${comfyMaskTargetNodeId}`);
+            
+            if (thumbImg) {
+                thumbImg.src = `http://${comfyHost}/view?filename=${data.name}&type=input&t=${Date.now()}`;
+                thumbImg.style.display = 'block';
+            }
+            // THIS FIXES THE "NO IMAGE CHOSEN" ISSUE
+            if (labelSpan) {
+                labelSpan.innerText = data.name; 
+            }
+            
+            btn.innerText = oldText;
+            
+            // 5. Cleanup & Return (Clears canvas via cancel function)
+            cancelComfyMasking(); 
+
+        } catch (e) {
+            alert("Upload Failed: " + e.message);
+            btn.innerText = oldText;
+        }
+    }, 'image/png');
 }
 
 // 8. AUTO-INIT ON LOAD

@@ -583,17 +583,29 @@ window.toggleGallerySelectionMode = function() {
     isSelectionMode = !isSelectionMode;
     const btn = document.getElementById('galSelectBtn');
     const delBtn = document.getElementById('galDeleteBtn');
+    
+    // Find the Clear All button (it doesn't have an ID, so we find it by its action)
+    const clearBtn = document.querySelector('button[onclick="clearDbGallery()"]');
+
     if (isSelectionMode) {
         btn.style.background = "var(--accent-primary)";
         btn.style.color = "white";
         delBtn.classList.remove('hidden');
+        
+        // HIDE Clear All button to save space
+        if(clearBtn) clearBtn.style.display = 'none';
+        
     } else {
         btn.style.background = "var(--input-bg)";
         btn.style.color = "var(--text-main)";
         delBtn.classList.add('hidden');
+        
         selectedImageIds.clear();
         document.querySelectorAll('.gal-tick').forEach(t => t.classList.add('hidden'));
         updateDeleteBtn();
+        
+        // SHOW Clear All button again
+        if(clearBtn) clearBtn.style.display = '';
     }
 }
 
