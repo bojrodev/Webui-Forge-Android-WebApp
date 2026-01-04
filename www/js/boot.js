@@ -209,4 +209,23 @@ window.onload = function() {
     }
 }
 
-    
+// --- BACKGROUND RELIABILITY HACK ---
+// We need to play the silent audio once the user touches the screen.
+// This "unlocks" the audio engine so it can keep running in the background.
+function unlockAudioContext() {
+    var audio = document.getElementById('keepAliveAudio');
+    if (audio) {
+        audio.play().then(() => {
+            console.log("Background audio hack activated.");
+        }).catch(e => {
+            console.warn("Audio autoplay blocked (waiting for interaction):", e);
+        });
+    }
+    // Remove listener after first successful interaction
+    document.removeEventListener('click', unlockAudioContext);
+    document.removeEventListener('touchstart', unlockAudioContext);
+}
+
+// Listen for the first click or touch anywhere in the app
+document.addEventListener('click', unlockAudioContext);
+document.addEventListener('touchstart', unlockAudioContext);    

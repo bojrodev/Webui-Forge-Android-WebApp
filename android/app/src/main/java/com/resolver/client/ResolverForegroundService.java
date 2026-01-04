@@ -7,8 +7,10 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
@@ -24,8 +26,12 @@ public class ResolverForegroundService extends Service {
     
     // Extras
     public static final String EXTRA_TITLE = "EXTRA_TITLE";
-    public static final String EXTRA_BODY = "EXTRA_BODY"; // Added Body Extra
+    public static final String EXTRA_BODY = "EXTRA_BODY";
     public static final String EXTRA_PROGRESS = "EXTRA_PROGRESS";
+    
+    // Locks (To keep CPU/WiFi alive)
+    private PowerManager.WakeLock wakeLock;
+    private WifiManager.WifiLock wifiLock;
     
     // --- Public Service Control Methods ---
     
@@ -39,7 +45,7 @@ public class ResolverForegroundService extends Service {
         }
         
         intent.putExtra(EXTRA_TITLE, title);
-        intent.putExtra(EXTRA_BODY, body); // Pass body
+        intent.putExtra(EXTRA_BODY, body);
         intent.putExtra(EXTRA_PROGRESS, progress);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -55,10 +61,41 @@ public class ResolverForegroundService extends Service {
         context.startService(intent);
     }
 
-    // --- Service Lifecycle ---
+    // --- Service Lifecycle & Lock Management ---
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // 1. Setup the WakeLock (Keeps CPU running)
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (powerManager != null) {
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Resolver:ServiceWakeLock");
+            wakeLock.setReferenceCounted(false);
+        }
+
+        // 2. Setup the WifiLock (Keeps Internet active)
+        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wifiManager != null) {
+            wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Resolver:ServiceWifiLock");
+            wifiLock.setReferenceCounted(false);
+        }
+    }
+
+    private void acquireLocks() {
+        if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire();
+        if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire();
+    }
+
+    private void releaseLocks() {
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // CRITICAL: Acquire locks immediately when the service runs
+        acquireLocks();
+
         if (intent != null) {
             String action = intent.getAction();
             
@@ -77,6 +114,8 @@ public class ResolverForegroundService extends Service {
                         updateNotification(title, body, progress);
                         break;
                     case ACTION_STOP_FOREGROUND_SERVICE:
+                        // Release locks when we explicitly stop
+                        releaseLocks();
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                             stopForeground(STOP_FOREGROUND_REMOVE);
                         } else {
@@ -87,7 +126,13 @@ public class ResolverForegroundService extends Service {
                 }
             }
         }
-        return START_STICKY; 
+        return START_REDELIVER_INTENT; 
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        releaseLocks(); 
     }
 
     // --- Notification Management ---
@@ -110,7 +155,6 @@ public class ResolverForegroundService extends Service {
     private Notification buildNotification(String title, String body, int progress) {
         createNotificationChannel();
         
-        // Use the passed 'body' text instead of hardcoded string
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(body) 
@@ -126,7 +170,8 @@ public class ResolverForegroundService extends Service {
         Notification notification = buildNotification(title, body, progress);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            // CHANGE: Using MEDIA_PLAYBACK type (matches your Manifest)
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }

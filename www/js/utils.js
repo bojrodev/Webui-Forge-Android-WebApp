@@ -90,8 +90,13 @@ function setupBackgroundListeners() {
     });
 }
 
+let lastNotifTime = 0; // Tracks the last time we updated Android
+let lastProgress = -1; // Tracks the last progress % we sent
+
 async function updateBatchNotification(title, force = false, body = "") {
     let progressVal = 0;
+    
+    // 1. Calculate Progress %
     try {
         if (body && body.includes(" / ")) {
             const parts = body.split(" / ");
@@ -103,14 +108,32 @@ async function updateBatchNotification(title, force = false, body = "") {
         progressVal = 0;
     }
 
-    if (ResolverService) {
+    // 2. THROTTLING LOGIC (The Fix)
+    const now = Date.now();
+    // Only update if:
+    // a. 'force' is true (e.g., Generation is Done)
+    // b. OR it has been more than 1000ms (1 second) since the last update
+    // c. OR progress is 0% (Start) or 100% (Finish)
+    if (!force && (now - lastNotifTime < 1000) && progressVal !== 0 && progressVal !== 100) {
+        return; // SKIP this update (Prevent freezing)
+    }
+
+    // 3. Update the Timers
+    lastNotifTime = now;
+    lastProgress = progressVal;
+
+    // 4. Send to Native Service (Safely)
+    // We check multiple places where the plugin might exist
+    const svc = (typeof ResolverService !== 'undefined' ? ResolverService : null) || 
+                (window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins.ResolverService : null);
+
+    if (svc) {
         try {
-            await ResolverService.updateProgress({
+            await svc.updateProgress({
                 title: title,
                 body: body,
                 progress: progressVal
             });
-            return;
         } catch (e) {
             console.error("Native Service Error:", e);
         }
