@@ -572,3 +572,84 @@ window.sendStopSignal = async function() {
         if(btn) btn.classList.remove('active');
     }
 }
+
+// -----------------------------------------------------------
+// PWK (PARTIAL WAKE/KILL) CONTROLS
+// -----------------------------------------------------------
+
+window.sendServiceSignal = async function(service, action) {
+    // 1. Resolve Server URL (Supports centralized & legacy config)
+    let serverUrl;
+    if (typeof buildWakeUrl === 'function' && connectionConfig.baseIp) {
+        serverUrl = buildWakeUrl();
+    } else {
+        serverUrl = localStorage.getItem('bojro_power_ip');
+    }
+
+    // 2. Validation
+    if (!serverUrl) {
+        alert("Please set the PC Server IP in settings first!");
+        if (typeof switchTab === 'function') switchTab('cfg');
+        return;
+    }
+
+    // 3. Visual Feedback Setup
+    // Targets IDs like: btn-forge-on, btn-comfy-off
+    const btnId = `btn-${service}-${action}`; 
+    const btn = document.getElementById(btnId);
+    
+    // Add active state (assumes CSS handles .active or similar)
+    if (btn) {
+        btn.classList.add('active');
+        btn.style.opacity = "0.5"; // Visual press effect
+    }
+
+    // Mapping for nicer Toast messages
+    const serviceNames = {
+        'forge': 'SD Forge',
+        'comfy': 'ComfyUI',
+        'lm': 'LM Studio'
+    };
+    const displayName = serviceNames[service] || service.toUpperCase();
+    const displayAction = action === 'on' ? 'STARTING' : 'KILLING';
+
+    if (Toast) Toast.show({
+        text: `${displayAction} ${displayName}...`,
+        duration: 'short'
+    });
+
+    try {
+        // 4. Construct Endpoint
+        // Matches Python routes: /power/forge/on, /power/lm/off, etc.
+        const endpoint = `${serverUrl}/power/${service}/${action}`;
+
+        // 5. Send Request
+        // No headers needed for simple POST trigger
+        const res = await fetch(endpoint, {
+            method: 'POST'
+        });
+
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+        // 6. Success
+        if (Toast) Toast.show({
+            text: `Signal Sent: ${displayName}`,
+            duration: 'short'
+        });
+
+    } catch (e) {
+        console.error("PWK Error:", e);
+        if (Toast) Toast.show({
+            text: 'Connection Failed (Check PC App)',
+            duration: 'short'
+        });
+    } finally {
+        // 7. Cleanup UI
+        if (btn) {
+            setTimeout(() => {
+                btn.classList.remove('active');
+                btn.style.opacity = "1";
+            }, 500);
+        }
+    }
+}

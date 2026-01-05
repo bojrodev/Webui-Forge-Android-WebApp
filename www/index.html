@@ -40,6 +40,12 @@
                             </svg>
                         </button>
 
+                        <button onclick="document.getElementById('pwkModal').classList.remove('hidden')" 
+                                class="btn-small" 
+                                style="width: auto; height: 36px; padding: 0 10px; font-weight: 900; font-size: 10px; color: var(--accent-secondary); border-color: rgba(var(--accent-primary-rgb), 0.3); background: rgba(var(--accent-primary-rgb), 0.05);">
+                            PWK
+                        </button>
+
                         <button id="kill-btn-mini" onclick="sendStopSignal()" class="btn-small" style="width: auto; height: 36px; padding: 0 12px; font-weight: 900; font-size: 12px; color: #ff4444; border-color: rgba(255, 68, 68, 0.3); background: rgba(255, 68, 68, 0.05);">
                             KILL!
                         </button>
@@ -945,7 +951,7 @@
                     <i data-lucide="save" size="16" style="vertical-align: -3px; margin-right: 8px;"></i> SAVE CONFIGURATION
                 </button>
                 
-                <div class="cfg-badge" style="text-align: center; color: var(--text-muted); font-size: 10px; margin-top: 20px; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase;">Resolver Client v1.5 (Ota Up-v1.5) • GPLv3 License</div>
+                <div class="cfg-badge" style="text-align: center; color: var(--text-muted); font-size: 10px; margin-top: 20px; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase;">Resolver Client v1.5 (Ota Up-v1.6) • GPLv3 License</div>
             </div>
             </div>
     </div>
@@ -1178,6 +1184,48 @@
             </button>
         </div>
     </div>
+
+<!-- Partial control modal for PWK (added) -->
+<div id="pwkModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 340px;">
+        <div class="modal-header">
+            <h3><i data-lucide="cpu" size="16" style="margin-right:8px;"></i> PARTIAL CONTROL</h3>
+            <button onclick="document.getElementById('pwkModal').classList.add('hidden')" class="close-btn">×</button>
+        </div>
+
+        <div class="col" style="gap: 15px; margin-top: 10px;">
+            
+            <div class="glass-box" style="margin:0; padding: 12px; display:flex; justify-content:space-between; align-items:center;">
+                <label style="margin:0; color:var(--text-main); font-size:12px;">SD WEBUI (FORGE)</label>
+                <div class="row" style="width:auto; gap:8px;">
+                    <button id="btn-forge-on" onclick="sendServiceSignal('forge', 'on')" class="btn-small" style="background:rgba(0, 230, 118, 0.1); color:#00e676; border-color:#00e676; padding: 6px 12px;">ON</button>
+                    <button id="btn-forge-off" onclick="sendServiceSignal('forge', 'off')" class="btn-small" style="background:rgba(244, 67, 54, 0.1); color:#f44336; border-color:#f44336; padding: 6px 12px;">KILL</button>
+                </div>
+            </div>
+
+            <div class="glass-box" style="margin:0; padding: 12px; display:flex; justify-content:space-between; align-items:center;">
+                <label style="margin:0; color:var(--text-main); font-size:12px;">COMFY UI</label>
+                <div class="row" style="width:auto; gap:8px;">
+                    <button id="btn-comfy-on" onclick="sendServiceSignal('comfy', 'on')" class="btn-small" style="background:rgba(0, 230, 118, 0.1); color:#00e676; border-color:#00e676; padding: 6px 12px;">ON</button>
+                    <button id="btn-comfy-off" onclick="sendServiceSignal('comfy', 'off')" class="btn-small" style="background:rgba(244, 67, 54, 0.1); color:#f44336; border-color:#f44336; padding: 6px 12px;">KILL</button>
+                </div>
+            </div>
+
+            <div class="glass-box" style="margin:0; padding: 12px; display:flex; justify-content:space-between; align-items:center;">
+                <label style="margin:0; color:var(--text-main); font-size:12px;">LM STUDIO (LLM)</label>
+                <div class="row" style="width:auto; gap:8px;">
+                    <button id="btn-lm-on" onclick="sendServiceSignal('lm', 'on')" class="btn-small" style="background:rgba(0, 230, 118, 0.1); color:#00e676; border-color:#00e676; padding: 6px 12px;">ON</button>
+                    <button id="btn-lm-off" onclick="sendServiceSignal('lm', 'off')" class="btn-small" style="background:rgba(244, 67, 54, 0.1); color:#f44336; border-color:#f44336; padding: 6px 12px;">KILL</button>
+                </div>
+            </div>
+
+        </div>
+        
+        <div style="margin-top: 20px; text-align: center;">
+            <p style="font-size: 10px; color: var(--text-muted);">Ensure paths are set in the PC App.</p>
+        </div>
+    </div>
+</div>
 
 <div id="updateModal" class="modal hidden" style="z-index: 10000; backdrop-filter: blur(5px);">
     <div class="modal-content" style="max-width: 320px; border: 1px solid var(--accent-primary); box-shadow: 0 0 30px rgba(0,0,0,0.6);">
