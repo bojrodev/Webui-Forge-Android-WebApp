@@ -1093,12 +1093,14 @@
     <div id="saacModal" class="modal hidden" style="z-index: 2000;">
         <div class="modal-content" style="height: 80vh; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-color);">
             <div class="modal-header" style="padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin:0; font-size: 16px; color: var(--text-main);">Character Select</h3>
-                <button onclick="window.SaacManager.close()" style="background:none; border:none; color: var(--text-muted); font-size: 24px;">&times;</button>
+                <h3 style="margin:0; font-size: 16px; color: var(--text-main); font-family: 'Orbitron'; letter-spacing: 1px;">Character Select</h3>
+                <button onclick="window.SaacManager.close()" class="saac-close-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
             <div style="padding: 15px;">
                 <input type="text" id="saacSearch" placeholder="Search characters..."
-                onkeyup="window.SaacManager.filterAndRender()"
+                onkeyup="window.SaacManager.render()"
                 style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px;">
             </div>
             <div id="saacGrid" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px;">
@@ -1343,6 +1345,10 @@
             </div>
         </div>
     </div>
+</div>
+<div id="saac-img-modal" onclick="window.SaacManager.closeImage()">
+    <img id="saac-img-content" src="" alt="Preview">
+    <div id="saac-img-title" style="color: white; margin-top: 15px; font-weight: 800; font-family: 'Orbitron';"></div>
 </div>
 
     <script src="js/lora.js"></script>
