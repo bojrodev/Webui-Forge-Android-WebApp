@@ -35,6 +35,15 @@ function loadConnectionConfig() {
         elMode.addEventListener('change', toggleConnectionModeUI);
         toggleConnectionModeUI(); 
     }
+    // Saac
+    const saacEnabled = localStorage.getItem('bojroSaacEnabled') === 'true';
+    const saacBtn = document.getElementById('btn-saac-trigger');
+    if(saacBtn) {
+        if(saacEnabled) saacBtn.classList.remove('hidden');
+        else saacBtn.classList.add('hidden');
+    }
+    const saacSwitch = document.getElementById('cfgSaacSwitch');
+    if(saacSwitch) saacSwitch.checked = saacEnabled;
 }
 
 // NEW: Helper to toggle UI visibility
@@ -495,5 +504,18 @@ window.toggleCloudflareUI = function() {
     if (cont) {
         if(isOn) cont.classList.remove('hidden');
         else cont.classList.add('hidden');
+    }
+}
+window.toggleSaac = function() {
+    const isChecked = document.getElementById('cfgSaacSwitch').checked;
+    localStorage.setItem('bojroSaacEnabled', isChecked);
+    
+    const btn = document.getElementById('btn-saac-trigger');
+    if(isChecked) {
+        btn.classList.remove('hidden');
+        // Pre-load data silently when enabled
+        if(window.SaacManager) window.SaacManager.init(); 
+    } else {
+        btn.classList.add('hidden');
     }
 }
