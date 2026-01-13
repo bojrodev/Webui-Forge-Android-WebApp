@@ -1704,3 +1704,160 @@ input[readonly], textarea[readonly] {
 button[onclick*="setComfyLoraStrength"] {
     transition: transform 0.2s ease, filter 0.2s ease;
 }
+/* =========================================
+   SAAC GRID REFINEMENT
+   ========================================= */
+
+#saacGrid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    grid-auto-rows: minmax(135px, auto) !important; 
+    gap: 12px !important;
+    padding: 15px !important;
+    align-content: start !important;
+}
+
+.saac-card {
+    display: flex !important;
+    flex-direction: column !important;
+    background: var(--bg-panel, #1a1a20);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    height: 100%;
+}
+
+/* --- THE NEON GLOW --- */
+.saac-card.saac-active {
+    border-color: var(--accent-primary, #ff9800) !important;
+    box-shadow: 
+        0 0 10px var(--accent-glow, rgba(255, 152, 0, 0.4)),
+        0 0 20px var(--accent-glow, rgba(255, 152, 0, 0.2));
+    transform: translateY(-2px);
+    z-index: 5;
+}
+
+/* --- RESIZED FULL IMAGE --- */
+.saac-card-thumb {
+    width: 100%;
+    height: 85px !important; 
+    background: #000;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.saac-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Shows full uncropped image */
+    display: block;
+}
+
+.saac-no-img {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 24px;
+    color: var(--text-muted);
+}
+
+/* --- TEXT SIZE UPGRADE --- */
+.saac-card-info {
+    padding: 10px 4px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-color);
+}
+
+.saac-card-name {
+    font-size: 13px !important; /* Larger text */
+    font-weight: 800;
+    color: var(--text-main, #fff);
+    text-align: center;
+    line-height: 1.1;
+    text-transform: uppercase;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.saac-card.saac-active .saac-card-name {
+    color: var(--accent-primary, #ff9800);
+}
+
+/* --- FIXED ZOOM BUTTON --- */
+.saac-card-zoom {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 6px;
+    border-radius: 6px;
+    color: white;
+    z-index: 10;
+    cursor: pointer;
+    backdrop-filter: blur(2px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.saac-card-zoom:active {
+    background: var(--accent-primary);
+    color: black;
+}
+
+/* FULL SCREEN MODAL Z-INDEX FIX */
+#saac-img-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); 
+    z-index: 100000; /* Ensure it sits above the SAAC modal */
+    display: flex; flex-direction: column; align-items: center; justify-content: center; 
+    opacity: 0; pointer-events: none; transition: 0.3s; 
+}
+#saac-img-modal.active { opacity: 1; pointer-events: auto; }
+#saac-img-content { max-width: 90%; max-height: 80%; object-fit: contain; border-radius: 12px; }
+
+/* --- SAAC ROUNDED CLOSE OPTION --- */
+.saac-close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.saac-close-btn:hover {
+    color: var(--text-main);
+    border-color: var(--text-muted);
+    background: var(--bg-panel);
+}
+
+.saac-close-btn:active {
+    transform: scale(0.9);
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+    box-shadow: 0 0 10px rgba(244, 67, 54, 0.4);
+}
+
+/* Ensure the SVG inside is perfectly centered */
+.saac-close-btn svg {
+    display: block;
+}

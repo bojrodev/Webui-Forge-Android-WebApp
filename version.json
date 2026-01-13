@@ -1,5 +1,5 @@
 {
-  "version": "1.7",
-  "url": "https://github.com/bojrodev/Resolver-Stable-Diffusion-Client-for-android/releases/download/OTAv1.7/OTA1.7.zip",
-  "note": "RESOLVER UPDATE! Enhanced External Network Access, Improved Stability, and Bug Fixes."
+  "version": "1.8",
+  "url": "https://github.com/bojrodev/Resolver-Stable-Diffusion-Client-for-android/releases/download/OTAv1.8/OTA1.8.zip",
+  "note": "RESOLVER UPDATE! SAAC Implementation. Skippable"
 }

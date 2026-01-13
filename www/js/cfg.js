@@ -35,6 +35,15 @@ function loadConnectionConfig() {
         elMode.addEventListener('change', toggleConnectionModeUI);
         toggleConnectionModeUI(); 
     }
+    // Saac
+    const saacEnabled = localStorage.getItem('bojroSaacEnabled') === 'true';
+    const saacBtn = document.getElementById('btn-saac-trigger');
+    if(saacBtn) {
+        if(saacEnabled) saacBtn.classList.remove('hidden');
+        else saacBtn.classList.add('hidden');
+    }
+    const saacSwitch = document.getElementById('cfgSaacSwitch');
+    if(saacSwitch) saacSwitch.checked = saacEnabled;
 }
 
 // NEW: Helper to toggle UI visibility
@@ -227,8 +236,8 @@ window.saveConfiguration = function() {
 // www/js/cfg.js
 
 window.resetAppConfig = function() {
-    // 1. Ask the user for confirmation
-    if (confirm('Reset all app configuration? This will clear settings AND remove downloaded updates.')) {
+    // 1. Ask the user for confirmation (updated message)
+    if (confirm('Reset all app configuration? This will clear settings, remove updates, AND delete the character database.')) {
         
         // 2. Clear all saved data
         localStorage.removeItem('bojroConnectionConfig');
@@ -239,6 +248,15 @@ window.resetAppConfig = function() {
         localStorage.removeItem('bojro_model_visibility'); 
         localStorage.removeItem('comfyHost');
         
+        // --- ADD THESE LINES FOR SAAC ---
+        localStorage.removeItem('saac_exact_db');
+        localStorage.removeItem('bojroSaacEnabled');
+        if (window.SaacManager) {
+            window.SaacManager.imgDb = null;
+            window.SaacManager.isLoaded = false;
+        }
+        // --------------------------------
+
         // 3. Reset variables
         connectionConfig = {
             baseIp: "",
@@ -252,7 +270,6 @@ window.resetAppConfig = function() {
         HOST = "";
         
         // 4. CRITICAL FIX: Reset the Native Updater
-        // This deletes the "stuck" update file and forces the app to use your new code
         if (window.resetNativeUpdater) {
              window.resetNativeUpdater(); 
         } else {
@@ -495,5 +512,27 @@ window.toggleCloudflareUI = function() {
     if (cont) {
         if(isOn) cont.classList.remove('hidden');
         else cont.classList.add('hidden');
+    }
+}
+window.toggleSaac = function() {
+    const isChecked = document.getElementById('cfgSaacSwitch').checked;
+    
+    if (isChecked) {
+        const hasDb = localStorage.getItem('saac_exact_db');
+        const message = hasDb 
+            ? "Enable Character Select?" 
+            : "Enable Character Selector for WAI-IL Models? (This will download approx 125MB of data on first use and will show all available characters for v16+ models.)";
+
+        if (confirm(message)) {
+            localStorage.setItem('bojroSaacEnabled', 'true');
+            document.getElementById('btn-saac-trigger')?.classList.remove('hidden');
+            if(window.SaacManager) window.SaacManager.init(); 
+        } else {
+            // If they cancel, turn the switch back off
+            document.getElementById('cfgSaacSwitch').checked = false;
+        }
+    } else {
+        localStorage.setItem('bojroSaacEnabled', 'false');
+        document.getElementById('btn-saac-trigger')?.classList.add('hidden');
     }
 }

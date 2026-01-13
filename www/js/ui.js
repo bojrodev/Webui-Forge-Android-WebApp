@@ -481,8 +481,12 @@ window.initHr = function() {
 
 // --- GLOBAL UI PERSISTENCE INITIALIZER ---
 
+// --- GLOBAL UI PERSISTENCE INITIALIZER ---
+
 window.initGlobalUiState = function() {
     loadSavedTheme(); 
+    
+    // Main Gen Tab Sections
     initGenericSection('grp-models', 'arr-models', 'bojro_vis_models');
     initGenericSection('grp-xl', 'arr-xl', 'bojro_vis_xl');
     initGenericSection('grp-flux', 'arr-flux', 'bojro_vis_flux');
@@ -490,9 +494,19 @@ window.initGlobalUiState = function() {
     initGenericSection('grp-flux-trident', 'arr-flux-trident', 'bojro_vis_flux_trident');
     initGenericSection('grp-qwen-modules', 'arr-qwen-modules', 'bojro_vis_qwen_modules');
     initGenericSection('fbc-settings-content', 'fbc-arrow', 'bojro_vis_fbc');
-    // --- UPDATED ---
+    
+    // CFG Tab Sections
     initGenericSection('cfg-appearance', 'arr-cfg-app', 'bojro_vis_cfg_app');
     initGenericSection('cfg-ui', 'arr-cfg-ui', 'bojro_vis_cfg_ui');
+    
+    // NEW: Local IP & Ports (Defaults to Open)
+    initGenericSection('cfg-local-ip', 'arr-cfg-local-ip', 'bojro_vis_cfg_local_ip');
+    initGenericSection('cfg-local-ports', 'arr-cfg-local-ports', 'bojro_vis_cfg_local_ports');
+
+    // FIX: RES EXP Persistence
+    initGenericSection('cfg-res-exp', 'arr-cfg-res', 'bojro_vis_cfg_res');
+
+    // Closed by default sections
     initGenericSectionClosed('cfg-sys', 'arr-cfg-sys', 'bojro_vis_cfg_sys');
 }
 

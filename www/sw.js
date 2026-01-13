@@ -1,4 +1,4 @@
-const CACHE_NAME = 'resolver-v1.7'; // Updated version to force a refresh
+const CACHE_NAME = 'resolver-v1.8'; // Updated version to force a refresh
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

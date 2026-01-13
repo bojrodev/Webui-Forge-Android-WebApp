@@ -46,7 +46,7 @@ async function checkForAppUpdate(silent = false) {
         const UPDATE_URL = 'https://raw.githubusercontent.com/bojrodev/Resolver-Stable-Diffusion-Client-for-android/dev/version.json';
         
         // IMPORTANT: Update this number manually when you release a new version
-        const currentVersion = '1.7'; 
+        const currentVersion = '1.8'; 
         // ---------------------
 
         const response = await fetch(UPDATE_URL + '?t=' + new Date().getTime());

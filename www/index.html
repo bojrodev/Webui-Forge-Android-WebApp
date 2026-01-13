@@ -104,6 +104,9 @@
                     </div>
                     <textarea id="xl_prompt" rows="3" oninput="savePrompt('xl')">1girl, hand fan, solo, black hair, long hair, jewelry, earrings, holding, chinese clothes, hair ornament, holding fan, red nails, looking at viewer, upper body, long sleeves, red lips, folding fan, smoke, hanfu, nail polish, masterpiece, best quality</textarea>
                     <button onclick="openLoraModal('xl')" class="btn-small dashed">+ ADD LORA</button>
+                    <button id="btn-saac-trigger" onclick="window.SaacManager.open()" class="btn-small dashed hidden" style="margin-top: 8px; border-color: #e91e63; color: #e91e63; width: 100%;">
+                        <i data-lucide="users" size="14" style="margin-right:4px;"></i> SAAC +
+                    </button>
                     <label><i data-lucide="shield-off" size="12"></i> Negative</label>
                     <textarea id="xl_neg" style="min-height: 50px;">bad quality,worst quality,worst detail</textarea>
                 </div>
@@ -878,13 +881,23 @@
 
                 <div id="container-local">
                     <div class="glass-box">
-                        <label><i data-lucide="wifi" size="12"></i> LOCAL IP ADDRESS</label>
-                        <input type="text" id="cfgBaseIp" placeholder="http://192.168.1.X" style="font-family: monospace;">
+                        <div class="row" onclick="toggleGeneric('cfg-local-ip', 'arr-cfg-local-ip', 'bojro_vis_cfg_local_ip')" style="justify-content:space-between; cursor:pointer; margin-bottom:5px;">
+                            <label style="cursor:pointer;"><i data-lucide="wifi" size="12"></i> LOCAL IP ADDRESS</label>
+                            <i id="arr-cfg-local-ip" data-lucide="chevron-down" size="14" style="transition: transform 0.2s;"></i>
+                        </div>
+                        
+                        <div id="cfg-local-ip" class="col">
+                            <input type="text" id="cfgBaseIp" placeholder="http://192.168.1.X" style="font-family: monospace;">
+                        </div>
                     </div>
 
                     <div class="glass-box">
-                        <label><i data-lucide="server" size="12"></i> LOCAL PORTS</label>
-                        <div class="col" style="gap: 12px; padding: 10px 0;">
+                        <div class="row" onclick="toggleGeneric('cfg-local-ports', 'arr-cfg-local-ports', 'bojro_vis_cfg_local_ports')" style="justify-content:space-between; cursor:pointer; margin-bottom:5px;">
+                            <label style="cursor:pointer;"><i data-lucide="server" size="12"></i> LOCAL PORTS</label>
+                            <i id="arr-cfg-local-ports" data-lucide="chevron-down" size="14" style="transition: transform 0.2s;"></i>
+                        </div>
+
+                        <div id="cfg-local-ports" class="col" style="gap: 12px; padding: 10px 0;">
                             <div class="row" style="align-items: center; gap: 10px;">
                                 <label style="margin: 0; min-width: 60px;">WebUI</label>
                                 <input type="number" id="cfgPortWebUI" value="7860" style="flex: 1; font-family: monospace;">
@@ -972,7 +985,19 @@
                         </div>
                     </div>
                 </div>
-
+                <div class="glass-box">
+                    <div class="row" onclick="toggleGeneric('cfg-res-exp', 'arr-cfg-res', 'bojro_vis_cfg_res')" style="justify-content:space-between; cursor:pointer; margin-bottom:5px;">
+                        <label style="cursor:pointer; color: var(--accent-primary);"><i data-lucide="flask-conical" size="12"></i> RES EXP</label>
+                        <i id="arr-cfg-res" data-lucide="chevron-down" size="14" style="transition: transform 0.2s;"></i>
+                    </div>
+                    <div id="cfg-res-exp" class="col" style="gap: 12px; padding: 10px 0;">
+                        <div class="row" style="justify-content: space-between; align-items: center; padding: 0 5px;">
+                            <label for="cfgSaacSwitch" style="margin: 0; color: var(--text-main); font-size: 13px;">SAAC</label>
+                            <input type="checkbox" id="cfgSaacSwitch" class="bojro-switch" onchange="toggleSaac()">
+                        </div>
+                    </div>
+                    <script>initGenericSection('cfg-res-exp', 'arr-cfg-res', 'bojro_vis_cfg_res')</script>
+                </div>
                 <div class="glass-box">
                     <div class="row" onclick="toggleGeneric('cfg-sys', 'arr-cfg-sys', 'bojro_vis_cfg_sys')" style="justify-content:space-between; cursor:pointer; margin-bottom:5px;">
                         <label style="cursor:pointer;"><i data-lucide="smartphone" size="12"></i> SYSTEM SETTINGS</label>
@@ -995,7 +1020,7 @@
                     <i data-lucide="save" size="16" style="vertical-align: -3px; margin-right: 8px;"></i> SAVE CONFIGURATION
                 </button>
                 
-                <div class="cfg-badge" style="text-align: center; color: var(--text-muted); font-size: 10px; margin-top: 20px; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase;">Resolver Client v1.5 (Ota Up-v1.7) • GPLv3 License</div>
+                <div class="cfg-badge" style="text-align: center; color: var(--text-muted); font-size: 10px; margin-top: 20px; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase;">Resolver Client v1.5 (Ota Up-v1.8) • GPLv3 License</div>
             </div>
             </div>
     </div>
@@ -1063,6 +1088,23 @@
             </div>
             
             <div id="loraVerticalList" style="flex: 1; overflow-y: auto; padding-bottom: 20px;"></div>
+        </div>
+    </div>
+    <div id="saacModal" class="modal hidden" style="z-index: 2000;">
+        <div class="modal-content" style="height: 80vh; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-color);">
+            <div class="modal-header" style="padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin:0; font-size: 16px; color: var(--text-main); font-family: 'Orbitron'; letter-spacing: 1px;">Character Select</h3>
+                <button onclick="window.SaacManager.close()" class="saac-close-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div style="padding: 15px;">
+                <input type="text" id="saacSearch" placeholder="Search characters..."
+                onkeyup="window.SaacManager.render()"
+                style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 8px;">
+            </div>
+            <div id="saacGrid" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px;">
+            </div>
         </div>
     </div>
     
@@ -1279,7 +1321,7 @@
                 <i data-lucide="sparkles" size="32" style="color: var(--accent-primary);"></i>
             </div>
             <h3 style="margin: 0; font-size: 18px; color: #fff;">Update Available</h3>
-            <div id="updateVersionBadge" style="display: inline-block; background: var(--accent-gradient); color: white; font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 4px; margin-top: 6px;">v1.7</div>
+            <div id="updateVersionBadge" style="display: inline-block; background: var(--accent-gradient); color: white; font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 4px; margin-top: 6px;">v1.8</div>
         </div>
 
         <div class="glass-box" style="text-align: left; padding: 12px; margin-bottom: 20px; max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.3);">
@@ -1304,6 +1346,10 @@
         </div>
     </div>
 </div>
+<div id="saac-img-modal" onclick="window.SaacManager.closeImage()">
+    <img id="saac-img-content" src="" alt="Preview">
+    <div id="saac-img-title" style="color: white; margin-top: 15px; font-weight: 800; font-family: 'Orbitron';"></div>
+</div>
 
     <script src="js/lora.js"></script>
     <script src="js/neo.js"></script>
@@ -1316,6 +1362,7 @@
     <script src="js/engine.js"></script>
     <script src="js/comfy_logic.js"></script>
     <script src="js/updater.js"></script>
+    <script src="js/saac.js"></script>
     <script src="js/boot.js"></script>
 
 
