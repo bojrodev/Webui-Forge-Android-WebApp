@@ -337,3 +337,16 @@ function parseGenInfo(rawText) {
 function gcd(a, b) {
     return b ? gcd(b, a % b) : a;
 }
+
+window.openExternalLink = async function(url) {
+    if (window.Capacitor && window.Capacitor.isNative && Browser) {
+        try {
+            await Browser.open({ url: url });
+        } catch (e) {
+            console.error("Browser plugin failed:", e);
+            window.open(url, '_system');
+        }
+    } else {
+        window.open(url, '_blank');
+    }
+};

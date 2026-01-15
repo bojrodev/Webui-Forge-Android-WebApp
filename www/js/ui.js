@@ -554,3 +554,8 @@ window.initGenericSection = function(contentId, arrowId, storageKey) {
         arrow.style.transform = 'rotate(0deg)';
     }
 }
+
+// Add this at the very bottom of ui.js
+if (window.StyleManager && typeof window.StyleManager.init === 'function') {
+    window.StyleManager.init();
+}

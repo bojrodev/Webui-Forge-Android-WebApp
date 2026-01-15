@@ -6,6 +6,7 @@ if (typeof lucide !== 'undefined') {
 // --- CAPACITOR PLUGINS ---
 // We define these globally so all other modules can access them
 const Filesystem = window.Capacitor ? window.Capacitor.Plugins.Filesystem : null;
+const Browser = window.Capacitor ? window.Capacitor.Plugins.Browser : null;
 const Toast = window.Capacitor ? window.Capacitor.Plugins.Toast : null;
 const LocalNotifications = window.Capacitor ? window.Capacitor.Plugins.LocalNotifications : null;
 const App = window.Capacitor ? window.Capacitor.Plugins.App : null;
@@ -13,6 +14,7 @@ const CapacitorHttp = window.Capacitor ? window.Capacitor.Plugins.CapacitorHttp 
 const ResolverService = window.Capacitor ? window.Capacitor.Plugins.ResolverService : null;
 // Add this under the existing plugins
 const CapacitorUpdater = window.Capacitor ? window.Capacitor.Plugins.CapacitorUpdater : null;
+
 
 
 // --- GLOBAL STATE ---

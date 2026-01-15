@@ -1861,3 +1861,31 @@ button[onclick*="setComfyLoraStrength"] {
 .saac-close-btn svg {
     display: block;
 }
+
+/* Ensure all modal headers respect internal padding and don't overflow */
+.modal-header {
+    width: 100%;
+    box-sizing: border-box !important;
+    padding: 10px 15px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Increase the hit-area of the close button for mobile thumbs */
+.close-btn {
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0; /* Prevents button from being squashed */
+}
+
+/* Force the modal content to never touch the extreme screen edges */
+.modal-content {
+    width: calc(100% - 20px) !important;
+    max-width: 500px;
+    margin: 10px auto !important;
+}

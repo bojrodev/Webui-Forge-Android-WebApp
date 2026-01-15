@@ -2,8 +2,7 @@ name: Build Desktop App
 
 on:
   release:
-    types: [created]
-  # Allows you to manually trigger the build from the "Actions" tab for testing
+    types: [published, created, released]
   workflow_dispatch:
 
 permissions:

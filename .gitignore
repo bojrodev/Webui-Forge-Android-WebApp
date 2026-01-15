@@ -15,3 +15,4 @@ desktop_server/build/
 desktop_server/dist/
 desktop_server/*.spec
 desktop_server/BojroPowerv5portable.exe
+Andoid Studio.bat
