@@ -209,23 +209,72 @@ window.onload = function() {
     }
 }
 
-// --- BACKGROUND RELIABILITY HACK ---
-// We need to play the silent audio once the user touches the screen.
-// This "unlocks" the audio engine so it can keep running in the background.
-function unlockAudioContext() {
-    var audio = document.getElementById('keepAliveAudio');
-    if (audio) {
-        audio.play().then(() => {
-            console.log("Background audio hack activated.");
-        }).catch(e => {
-            console.warn("Audio autoplay blocked (waiting for interaction):", e);
-        });
-    }
-    // Remove listener after first successful interaction
-    document.removeEventListener('click', unlockAudioContext);
-    document.removeEventListener('touchstart', unlockAudioContext);
+
+// =========================================================================
+// 17. WEBVIEW LIFESAVER (Samsung Workaround - "Heartbeat Edition")
+// =========================================================================
+
+// Global audio object
+let keepAliveAudio = new Audio('silence.mp3');
+keepAliveAudio.loop = true;
+keepAliveAudio.volume = 0.01; // Tiny volume
+
+let isAudioUnlocked = false;
+let keepAliveInterval = null; // The handle for our "Heartbeat" timer
+
+// 1. One-time Unlocker
+function unlockAudioEngine() {
+    if (isAudioUnlocked) return;
+    
+    keepAliveAudio.play().then(() => {
+        keepAliveAudio.pause();
+        keepAliveAudio.currentTime = 0;
+        isAudioUnlocked = true;
+        console.log("[Audio] Engine Unlocked - Ready");
+        
+        document.removeEventListener('click', unlockAudioEngine);
+        document.removeEventListener('touchstart', unlockAudioEngine);
+    }).catch(e => {
+        console.warn("[Audio] Unlock failed:", e);
+    });
 }
 
-// Listen for the first click or touch anywhere in the app
-document.addEventListener('click', unlockAudioContext);
-document.addEventListener('touchstart', unlockAudioContext);    
+// 2. The Shield (Now with SELF-HEALING)
+window.activateKeepAlive = function() {
+    if (!isAudioUnlocked) return;
+    
+    // Prevent double-activation
+    if (keepAliveInterval) return;
+
+    console.log("[Audio] SHIELD ACTIVATED");
+    
+    // A. Play immediately
+    keepAliveAudio.play().catch(e => console.error(e));
+
+    // B. Start the "Heartbeat" (The 5-second recovery rule)
+    keepAliveInterval = setInterval(() => {
+        if (keepAliveAudio.paused) {
+            console.warn("[Audio] Focus lost! Reclaiming...");
+            keepAliveAudio.play().catch(e => console.error("Reclaim failed:", e));
+        }
+    }, 5000); // Check every 5 seconds
+}
+
+// 3. The Release
+window.deactivateKeepAlive = function() {
+    console.log("[Audio] SHIELD DEACTIVATED");
+    
+    // A. Stop the Heartbeat
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+    }
+
+    // B. Stop the Audio
+    keepAliveAudio.pause();
+    keepAliveAudio.currentTime = 0;
+}
+
+// Attach Unlocker
+document.addEventListener('click', unlockAudioEngine);
+document.addEventListener('touchstart', unlockAudioEngine);

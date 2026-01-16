@@ -29,7 +29,7 @@ public class ResolverForegroundService extends Service {
     public static final String EXTRA_BODY = "EXTRA_BODY";
     public static final String EXTRA_PROGRESS = "EXTRA_PROGRESS";
     
-    // Locks (To keep CPU/WiFi alive)
+    // Locks (CRITICAL: These keep the CPU and WiFi hardware awake)
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock wifiLock;
     
@@ -170,8 +170,8 @@ public class ResolverForegroundService extends Service {
         Notification notification = buildNotification(title, body, progress);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // CHANGE: Using MEDIA_PLAYBACK type (matches your Manifest)
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+            // Uses DATA_SYNC to comply with Android 14
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }

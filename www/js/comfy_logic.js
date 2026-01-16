@@ -22,6 +22,10 @@ let isTmplSelectionMode = false;
 
 let originalInpHtml = null;
 
+let comfyReconnectAttempts = 0;
+let comfyReconnectTimer = null;
+const MAX_RECONNECT_DELAY = 30000; // Cap delay at 30 seconds
+
 // --- COMFY EDITOR STATE ---
 var isComfyMaskingMode = false;
 var comfyMaskTargetNodeId = null;
@@ -56,12 +60,22 @@ function connectToComfy() {
     updateComfyStatus('connecting');
 
     try {
-        if (comfySocket) comfySocket.close();
+        if (comfySocket) {
+            // Remove old listeners to prevent duplicate triggers
+            comfySocket.onclose = null; 
+            comfySocket.close();
+        }
         
         comfySocket = new WebSocket(`ws://${comfyHost}/ws?clientId=${comfyClientId}`);
 
         comfySocket.onopen = async () => {
+            console.log("[ComfyUI] Connected!");
             updateComfyStatus('connected');
+            
+            // RESET BACKOFF ON SUCCESS (Crucial for stability)
+            comfyReconnectAttempts = 0; 
+            if (comfyReconnectTimer) clearTimeout(comfyReconnectTimer);
+
             // Fetch all resource lists in parallel
             await Promise.all([
                 fetchComfyList('CheckpointLoaderSimple', 'ckpt_name', 'checkpoints'),
@@ -77,8 +91,18 @@ function connectToComfy() {
             if(comfyLoadedWorkflow) buildComfyUI(comfyLoadedWorkflow);
         };
 
-        comfySocket.onclose = () => {
+        comfySocket.onclose = (e) => {
             updateComfyStatus('disconnected');
+            
+            // EXPONENTIAL BACKOFF LOGIC
+            // Tries to reconnect in 1s, then 2s, then 4s, etc.
+            const delay = Math.min(1000 * Math.pow(2, comfyReconnectAttempts), MAX_RECONNECT_DELAY);
+            console.warn(`[ComfyUI] Disconnected. Reconnecting in ${delay}ms...`);
+            
+            comfyReconnectTimer = setTimeout(() => {
+                comfyReconnectAttempts++;
+                connectToComfy();
+            }, delay);
         };
 
         comfySocket.onmessage = (event) => {
@@ -400,24 +424,6 @@ function addComfyLora(parent, nodeId, title, inputs) {
     comfyInputMap[`in_${nodeId}_lora_name`] = { nodeId, field: 'lora_name' };
     parent.appendChild(wrapper);
     if(window.lucide) lucide.createIcons();
-}
-
-function setComfyLoraStrength(nodeId, val) {
-    // 1. Update Database/Memory
-    updateComfyValue(nodeId, 'strength_model', val);
-    updateComfyValue(nodeId, 'strength_clip', val);
-
-    // 2. Update UI (Model Slider)
-    const mSlider = document.getElementById(`in_${nodeId}_strength_model`);
-    const mText = document.getElementById(`val_in_${nodeId}_strength_model`);
-    if (mSlider) mSlider.value = val;
-    if (mText) mText.innerText = val;
-    
-    // 3. Update UI (Clip Slider)
-    const cSlider = document.getElementById(`in_${nodeId}_strength_clip`);
-    const cText = document.getElementById(`val_in_${nodeId}_strength_clip`);
-    if (cSlider) cSlider.value = val;
-    if (cText) cText.innerText = val;
 }
 
 function clearComfyLora(nodeId) {

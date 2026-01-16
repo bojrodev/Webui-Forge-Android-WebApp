@@ -2,6 +2,26 @@
 // JOB BUILDER & GENERATION ENGINE
 // -----------------------------------------------------------
 
+// --- NEW HELPER: RETRY FETCH ---
+// This tool tries to connect 5 times before giving up.
+async function fetchWithRetry(url, options, retries = 5, backoff = 1000) {
+    try {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error("Server Status: " + res.status);
+        return res;
+    } catch (err) {
+        console.warn(`[Network] Fetch failed. Retries left: ${retries}. Error: ${err.message}`);
+        
+        // If we have no retries left, we finally fail
+        if (retries <= 0) throw err;
+        
+        // Wait a bit (1 second, then 1.5s, etc.) then try again
+        await new Promise(r => setTimeout(r, backoff));
+        return fetchWithRetry(url, options, retries - 1, backoff * 1.5);
+    }
+}
+
+
 function buildJobFromUI() {
     // FIX 1: Prioritize Inpaint Task Check BEFORE Qwen Mode Check
 
@@ -299,7 +319,10 @@ window.processQueue = async function() {
 
     isQueueRunning = true;
 
-    // FIX: Calculate total batch steps accurately including High-Res passes
+    // --- 1. START PROTECTION ---
+    if (typeof window.activateKeepAlive === 'function') window.activateKeepAlive();
+
+    // --- 2. Calculate Steps ---
     totalBatchSteps = queueState.ongoing.reduce((acc, job) => {
         let perImage = job.payload.steps || 0;
         if (job.payload.enable_hr) {
@@ -310,6 +333,7 @@ window.processQueue = async function() {
 
     currentBatchProgress = 0;
 
+    // --- 3. UI Setup ---
     document.getElementById('queueProgressBox').classList.remove('hidden');
     const btn = document.getElementById('startQueueBtn');
     const oldText = btn.innerText;
@@ -318,10 +342,12 @@ window.processQueue = async function() {
 
     if (document.hidden) updateBatchNotification("Starting batch job...", true, `0 / ${totalBatchSteps} steps`);
 
+    // --- 4. The Loop (Only ONE loop) ---
     while (queueState.ongoing.length > 0) {
         const job = queueState.ongoing[0];
         try {
             await runJob(job, true);
+            
             const finishedJob = queueState.ongoing.shift();
             finishedJob.finishedAt = new Date().toLocaleString();
             queueState.completed.push(finishedJob);
@@ -331,23 +357,34 @@ window.processQueue = async function() {
             console.error(e);
             updateBatchNotification("Batch Paused", true, "Error occurred");
             alert("Batch paused: " + e.message);
-            break;
+            break; // Stop loop on error
         }
     }
+
+    // --- 5. Cleanup ---
     isQueueRunning = false;
     btn.innerText = oldText;
     btn.disabled = false;
     document.getElementById('queueProgressBox').classList.add('hidden');
 
+    // --- 6. STOP PROTECTION ---
+    if (typeof window.deactivateKeepAlive === 'function') window.deactivateKeepAlive();
+
     // Stop persistent notification
-    if (ResolverService) {
+    if (window.ResolverService) {
         try {
-            await ResolverService.stop();
+            await window.ResolverService.stop();
+        } catch (e) {}
+    } else if (window.Capacitor && window.Capacitor.Plugins.ResolverService) {
+        try {
+             window.Capacitor.Plugins.ResolverService.stop();
         } catch (e) {}
     }
 
     // Send completion notification
-    await sendCompletionNotification("Batch Complete: All images ready.");
+    if (typeof sendCompletionNotification === 'function') {
+        await sendCompletionNotification("Batch Complete: All images ready.");
+    }
 
     if (queueState.ongoing.length === 0) alert("Batch Complete!");
 }
@@ -355,19 +392,41 @@ window.processQueue = async function() {
 window.generate = async function() {
     const job = buildJobFromUI();
     if (!job) return alert("Please select a model first.");
-    isSingleJobRunning = true;
-    await runJob(job, false);
-    isSingleJobRunning = false;
 
-    // Stop persistent notification
-    if (ResolverService) {
-        try {
-            await ResolverService.stop();
-        } catch (e) {}
+    // --- 1. START PROTECTION ---
+    if (typeof window.activateKeepAlive === 'function') window.activateKeepAlive();
+
+    isSingleJobRunning = true;
+
+    try {
+        // Run the job
+        await runJob(job, false);
+    } catch (e) {
+        console.error("Generation Error:", e);
+        alert("Error: " + e.message);
+    } finally {
+        // --- 2. ALWAYS CLEAN UP ---
+        isSingleJobRunning = false;
+
+        // --- 3. STOP PROTECTION ---
+        if (typeof window.deactivateKeepAlive === 'function') window.deactivateKeepAlive();
+
+        // Stop persistent notification (Robust Check)
+        if (window.ResolverService) {
+            try {
+                await window.ResolverService.stop();
+            } catch (e) {}
+        } else if (window.Capacitor && window.Capacitor.Plugins.ResolverService) {
+            try {
+                 window.Capacitor.Plugins.ResolverService.stop();
+            } catch (e) {}
+        }
     }
 
     // Send completion notification
-    await sendCompletionNotification("Generation Complete: Image Ready");
+    if (typeof sendCompletionNotification === 'function') {
+        await sendCompletionNotification("Generation Complete: Image Ready");
+    }
 }
 
 window.clearGenResults = function() {
@@ -473,7 +532,8 @@ async function runJob(job, isBatch = false) {
         }, 1000);
 
         const endpoint = job.mode === 'inp' ? '/sdapi/v1/img2img' : '/sdapi/v1/txt2img';
-        const res = await fetch(`${HOST}${endpoint}`, {
+
+        const res = await fetchWithRetry(`${HOST}${endpoint}`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify(job.payload)
